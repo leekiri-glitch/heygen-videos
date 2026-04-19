@@ -23,6 +23,10 @@ Thumbs.db
 AVATAR-*.md
 .heygen/
 
+# Skills installation
+.agents/
+skills-lock.json
+
 # Build
 dist/
 build/
