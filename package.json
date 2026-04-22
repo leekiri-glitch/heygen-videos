@@ -1,0 +1,9 @@
+{
+  "name": "heygen-videos",
+  "version": "1.0.0",
+  "description": "Scene Studio - HeyGen video creation platform",
+  "private": true,
+  "engines": {
+    "node": "20.x"
+  }
+}
