@@ -1,0 +1,926 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Scene Studio — HeyGen voorbereiding</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<style>
+  :root {
+    --bg: #f5f1ea; --surface: #fbf8f2; --ink: #1c1a17; --ink-2: #4a453e; --ink-3: #8a8379;
+    --line: #e4ddd0; --line-2: #d4ccbc; --accent: #c85a1f; --accent-soft: #f4e6d9;
+    --ok: #1f7a3f; --warn: #a66600; --err: #9a2a1a;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink); font-family: 'Inter', system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  button { font-family: inherit; cursor: pointer; border: none; background: none; color: inherit; }
+  textarea, input { font-family: inherit; }
+  .mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+  .serif { font-family: 'Fraunces', Georgia, serif; font-variation-settings: "opsz" 72; }
+  @keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: 0.5 } }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" data-presets="react">
+const { useState, useEffect, useRef, useMemo } = React;
+
+const DEFAULT_MIMIEKEN = [
+  { id: "neutral",    label: "neutral",    nl: "Neutraal",    src: "assets/neutral.png" },
+  { id: "original",   label: "original",   nl: "Origineel",   src: "assets/original.png" },
+  { id: "smile",      label: "smile",      nl: "Glimlach",    src: "assets/smile.png" },
+  { id: "truth_drop", label: "truth_drop", nl: "Truth drop",  src: "assets/truth_drop.png" },
+];
+
+const TEMPLATES = [
+  {
+    name: "Intro",
+    scenes: [
+      { mimiek: "smile", text: "Hallo, ik ben [je naam]. Welkom!" },
+    ]
+  },
+  {
+    name: "Product Demo",
+    scenes: [
+      { mimiek: "neutral", text: "Dit is [product naam]." },
+      { mimiek: "smile", text: "Het helpt je om [voordeel 1] te doen." },
+      { mimiek: "original", text: "En het is heel gemakkelijk te gebruiken." },
+    ]
+  },
+  {
+    name: "Testimonial",
+    scenes: [
+      { mimiek: "neutral", text: "Als klant ben ik heel blij met [product]." },
+      { mimiek: "smile", text: "Het heeft mijn workflow echt verbeterd." },
+    ]
+  },
+  {
+    name: "Call to Action",
+    scenes: [
+      { mimiek: "smile", text: "Dus, wat wacht je nog op?" },
+      { mimiek: "original", text: "Klik op de link hieronder en begin vandaag nog!" },
+    ]
+  },
+];
+
+const DEFAULT_SCRIPT = `[original] Kom, zit. Ik schenk je een glas thee.
+
+[neutral] Er is iets dat ik je wil vertellen. Iets wat niemand je op school leert, en wat ik zelf pas op mijn vijftigste begreep.
+
+[truth_drop] De meeste mensen wachten hun hele leven op het juiste moment. Dat moment komt nooit.
+
+[neutral] Je moet beginnen met wat je hebt. Met de handen die je hebt. Met de tijd die je vandaag krijgt.
+
+[smile] En weet je wat het grappige is? Zodra je begint, komt de rest vanzelf. Echt waar.
+
+[original] Drink nog een glas. Dan vertel ik je de rest.`;
+
+function parseScript(raw, mimiekIds) {
+  if (!raw.trim()) return [];
+  const re = /\[([a-z_]+)\]([\s\S]*?)(?=\[[a-z_]+\]|$)/gi;
+  const scenes = [];
+  let m;
+  while ((m = re.exec(raw)) !== null) {
+    const tag = m[1].toLowerCase().trim();
+    const text = m[2].trim();
+    if (!text) continue;
+    const valid = mimiekIds.includes(tag);
+    scenes.push({ id: scenes.length + 1, mimiek: valid ? tag : (mimiekIds[0] || "neutral"), rawTag: tag, valid, text });
+  }
+  if (scenes.length === 0 && raw.trim()) {
+    scenes.push({ id: 1, mimiek: mimiekIds[0] || "neutral", rawTag: "neutral", valid: true, text: raw.trim() });
+  }
+  return scenes;
+}
+const estSec = (t) => Math.max(1, Math.round(t.trim().split(/\s+/).filter(Boolean).length / 2.5));
+const fmt = (s) => `${Math.floor(s/60)}:${String(s%60).padStart(2,"0")}`;
+
+function Pill({ children, tone = "default" }) {
+  const t = ({
+    default: { bg: "#efe8d9", fg: "#4a453e" },
+    ok: { bg: "#e0ebe2", fg: "#1f4a2d" },
+    warn: { bg: "#f5e3c7", fg: "#7a4a00" },
+    accent: { bg: "var(--accent-soft)", fg: "var(--accent)" },
+    err: { bg: "#f2dcd6", fg: "var(--err)" },
+  })[tone] || { bg: "#efe8d9", fg: "#4a453e" };
+  return <span className="mono" style={{ fontSize: 10.5, letterSpacing: 0.4, textTransform: "uppercase", background: t.bg, color: t.fg, padding: "3px 8px", borderRadius: 3, fontWeight: 500 }}>{children}</span>;
+}
+
+const Ico = {
+  copy: (s=14) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>,
+  dl:   (s=14) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>,
+  ok:   (s=14) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>,
+  up:   (s=14) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>,
+  play: (s=14) => <svg width={s} height={s} viewBox="0 0 24 24" fill="currentColor"><polygon points="6 4 20 12 6 20"/></svg>,
+  plus: (s=14) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>,
+  mic:  (s=14) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>,
+  key:  (s=14) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="7.5" cy="15.5" r="5.5"/><path d="M21 2l-9.6 9.6"/><path d="M15.5 7.5l3 3L22 7l-3-3"/></svg>,
+  x:    (s=14) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>,
+};
+
+/* =========================== APP =========================== */
+
+function App() {
+  const [mimieken, setMimieken] = useState(() => {
+    const s = localStorage.getItem("ss_mimieken_v2");
+    return s ? JSON.parse(s) : DEFAULT_MIMIEKEN;
+  });
+  const [script, setScript] = useState(() => localStorage.getItem("ss_script") || DEFAULT_SCRIPT);
+  const [scenes, setScenes] = useState([]);
+  const [autoParse, setAutoParse] = useState(true);
+  const [apiKey, setApiKey] = useState(() => localStorage.getItem("ss_api_key") || "");
+  const [voiceFile, setVoiceFile] = useState(null);
+  const [voiceName, setVoiceName] = useState("");
+  const [toast, setToast] = useState(null);
+  const [heygenStatus, setHeygenStatus] = useState(null); // null | running | done | error
+  const [heygenLog, setHeygenLog] = useState([]);
+  const [videoId, setVideoId] = useState(null);
+  const [draggedIdx, setDraggedIdx] = useState(null);
+  const [dragOverIdx, setDragOverIdx] = useState(null);
+  const [previewPlaying, setPreviewPlaying] = useState(false);
+  const [previewIdx, setPreviewIdx] = useState(0);
+  const [previewTime, setPreviewTime] = useState(0);
+  const [avatarIds, setAvatarIds] = useState(() => {
+    const s = localStorage.getItem("ss_avatar_ids");
+    return s ? JSON.parse(s) : {};
+  });
+  const [uploadingAvatars, setUploadingAvatars] = useState({});
+  const [sceneTiming, setSceneTiming] = useState(() => {
+    const s = localStorage.getItem("ss_scene_timing");
+    return s ? JSON.parse(s) : {};
+  });
+  const [history, setHistory] = useState([scenes]);
+  const [historyIdx, setHistoryIdx] = useState(0);
+  const [voicePreviewText, setVoicePreviewText] = useState("Test mijn voice hier.");
+  const [voicePreviewPlaying, setVoicePreviewPlaying] = useState(false);
+
+  const mimiekIds = useMemo(() => mimieken.map(m => m.id), [mimieken]);
+  const mimiekById = useMemo(() => Object.fromEntries(mimieken.map(m => [m.id, m])), [mimieken]);
+
+  useEffect(() => {
+    localStorage.setItem("ss_script", script);
+    if (autoParse) setScenes(parseScript(script, mimiekIds));
+  }, [script, autoParse, mimiekIds]);
+
+  useEffect(() => { localStorage.setItem("ss_mimieken_v2", JSON.stringify(mimieken)); }, [mimieken]);
+  useEffect(() => { if (apiKey) localStorage.setItem("ss_api_key", apiKey); }, [apiKey]);
+  useEffect(() => { localStorage.setItem("ss_avatar_ids", JSON.stringify(avatarIds)); }, [avatarIds]);
+  useEffect(() => { localStorage.setItem("ss_scene_timing", JSON.stringify(sceneTiming)); }, [sceneTiming]);
+
+  useEffect(() => {
+    if (historyIdx < history.length - 1) {
+      setHistory(prev => prev.slice(0, historyIdx + 1));
+      setHistoryIdx(prev => prev + 1);
+    }
+    setHistory(prev => [...prev, scenes]);
+    setHistoryIdx(prev => prev + 1);
+  }, [scenes]);
+
+  useEffect(() => {
+    if (!previewPlaying || scenes.length === 0) return;
+    const interval = setInterval(() => {
+      setPreviewTime(prev => {
+        const currentScene = scenes[previewIdx];
+        const sceneDur = estSec(currentScene.text);
+        if (prev >= sceneDur - 0.1) {
+          if (previewIdx < scenes.length - 1) {
+            setPreviewIdx(prev => prev + 1);
+            return 0;
+          } else {
+            setPreviewPlaying(false);
+            return prev;
+          }
+        }
+        return prev + 0.1;
+      });
+    }, 100);
+    return () => clearInterval(interval);
+  }, [previewPlaying, previewIdx, scenes]);
+
+  const totalSec = scenes.reduce((s, sc) => s + estSec(sc.text), 0);
+  const totalWords = scenes.reduce((s, sc) => s + sc.text.split(/\s+/).filter(Boolean).length, 0);
+
+  function showToast(msg) { setToast(msg); setTimeout(() => setToast(null), 2200); }
+
+  function setSceneMimiek(idx, id) {
+    setScenes(prev => prev.map((sc, i) => i === idx ? { ...sc, mimiek: id, valid: true } : sc));
+  }
+
+  async function uploadAvatarToHeyGen(mimiekId, imageBase64) {
+    if (!apiKey) return;
+    setUploadingAvatars(prev => ({ ...prev, [mimiekId]: true }));
+    try {
+      const response = await fetch("https://api.heygen.com/v1/avatar", {
+        method: "POST",
+        headers: { "X-Api-Key": apiKey, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          avatar_name: mimiekId,
+          image_url: imageBase64,
+        }),
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setAvatarIds(prev => ({ ...prev, [mimiekId]: data.avatar_id }));
+        showToast(`Avatar "${mimiekId}" geüpload naar HeyGen`);
+      } else {
+        const err = await response.json();
+        showToast(`Avatar upload fout: ${err.message || response.status}`);
+      }
+    } catch (err) {
+      showToast(`Avatar upload error: ${err.message}`);
+    } finally {
+      setUploadingAvatars(prev => ({ ...prev, [mimiekId]: false }));
+    }
+  }
+
+  function handleMimiekUpload(id, file) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      setMimieken(prev => prev.map(m => m.id === id ? { ...m, src: e.target.result, custom: true } : m));
+      uploadAvatarToHeyGen(id, e.target.result);
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function addMimiek(file) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const id = "mimiek_" + Date.now().toString(36);
+      const label = file.name.replace(/\.[^.]+$/, "").toLowerCase().replace(/[^a-z0-9]/g, "_").slice(0, 20) || id;
+      setMimieken(prev => [...prev, { id: label, label, nl: label, src: e.target.result, custom: true }]);
+      uploadAvatarToHeyGen(label, e.target.result);
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function removeMimiek(id) {
+    if (mimieken.length <= 1) { showToast("Minimaal 1 mimiek nodig"); return; }
+    setMimieken(prev => prev.filter(m => m.id !== id));
+  }
+
+  function insertTemplate(template) {
+    const newScenes = template.scenes.map((t, i) => ({
+      id: scenes.length + i + 1,
+      mimiek: t.mimiek,
+      rawTag: t.mimiek,
+      valid: true,
+      text: t.text
+    }));
+    setScenes(prev => [...prev, ...newScenes]);
+    showToast(`Template "${template.name}" ingevoegd`);
+  }
+
+  function deleteScene(idx) {
+    setScenes(prev => prev.filter((_, i) => i !== idx));
+    showToast(`Scene ${idx+1} verwijderd`);
+  }
+
+  function duplicateScene(idx) {
+    const scene = scenes[idx];
+    const newScene = { ...scene, id: Math.max(...scenes.map(s => s.id), 0) + 1 };
+    setScenes(prev => [...prev.slice(0, idx+1), newScene, ...prev.slice(idx+1)]);
+    showToast(`Scene ${idx+1} gedupliceerd`);
+  }
+
+  function undo() {
+    if (historyIdx > 0) {
+      const newIdx = historyIdx - 1;
+      setHistoryIdx(newIdx);
+      setScenes(history[newIdx]);
+      showToast("Ongedaan gemaakt");
+    }
+  }
+
+  function redo() {
+    if (historyIdx < history.length - 1) {
+      const newIdx = historyIdx + 1;
+      setHistoryIdx(newIdx);
+      setScenes(history[newIdx]);
+      showToast("Opnieuw gedaan");
+    }
+  }
+
+  function getSceneDuration(idx) {
+    return sceneTiming[scenes[idx]?.id] || estSec(scenes[idx]?.text || "");
+  }
+
+  function setSceneDuration(idx, sec) {
+    setSceneTiming(prev => ({ ...prev, [scenes[idx].id]: Math.max(1, sec) }));
+  }
+
+  useEffect(() => {
+    function handleKeyDown(e) {
+      if (e.ctrlKey || e.metaKey) {
+        if (e.key === "z" && !e.shiftKey) { e.preventDefault(); undo(); }
+        if ((e.key === "z" && e.shiftKey) || (e.key === "y")) { e.preventDefault(); redo(); }
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [historyIdx, history]);
+
+  function handleVoiceUpload(file) {
+    setVoiceFile(file);
+    setVoiceName(file.name);
+    showToast(`Voice geladen: ${file.name}`);
+  }
+
+  function copyScene(idx) {
+    navigator.clipboard.writeText(scenes[idx].text).then(() => showToast(`Scene ${idx+1} gekopieerd`));
+  }
+
+  function moveScene(fromIdx, toIdx) {
+    if (fromIdx === toIdx) return;
+    const newScenes = [...scenes];
+    const [dragged] = newScenes.splice(fromIdx, 1);
+    newScenes.splice(toIdx, 0, dragged);
+    setScenes(newScenes);
+    showToast(`Scene ${fromIdx+1} verplaatst naar ${toIdx+1}`);
+  }
+
+  function copyDraaiboek() {
+    const lines = scenes.map((sc, i) => `SCENE ${String(i+1).padStart(2,"0")}  —  avatar: ${sc.mimiek}  —  ~${estSec(sc.text)}s\n${sc.text}\n`);
+    const out = `HAJJA VIDEO DRAAIBOEK\n${scenes.length} scenes · ~${fmt(totalSec)} · ${totalWords} woorden\n\n${lines.join("\n")}`;
+    navigator.clipboard.writeText(out).then(() => showToast("Draaiboek gekopieerd"));
+  }
+
+  function exportDraaiboek() {
+    const lines = scenes.map((sc, i) => `SCENE ${String(i+1).padStart(2,"0")}  —  avatar: ${sc.mimiek}  —  ~${estSec(sc.text)}s\n${sc.text}\n`);
+    const header = `HAJJA VIDEO DRAAIBOEK\n${new Date().toLocaleString("nl-NL")}\n${scenes.length} scenes · ~${fmt(totalSec)}\n\n`;
+    const blob = new Blob([header + lines.join("\n")], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = `draaiboek_${Date.now()}.txt`; a.click();
+  }
+
+  function downloadVideo() {
+    if (!videoId) { showToast("Geen video om te downloaden"); return; }
+    setHeygenLog(prev => [...prev, "📥 Download starten…"]);
+    showToast("Download gestart");
+  }
+
+  async function previewVoice() {
+    if (!apiKey) { showToast("HeyGen API-key nodig"); return; }
+    if (!voicePreviewText.trim()) { showToast("Voer preview tekst in"); return; }
+
+    setVoicePreviewPlaying(true);
+    try {
+      const response = await fetch("https://api.heygen.com/v1/voice_preview", {
+        method: "POST",
+        headers: { "X-Api-Key": apiKey, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: voicePreviewText,
+          voice_id: "7af5d3f2-7c2f-4888-a4be-e47b87f3fcf1",
+        }),
+      });
+
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.message || `API error ${response.status}`);
+      }
+
+      const data = await response.json();
+      const audio = new Audio(data.audio_url);
+      audio.play();
+      showToast("Voice preview speelt af…");
+    } catch (err) {
+      showToast(`Voice preview error: ${err.message}`);
+    } finally {
+      setVoicePreviewPlaying(false);
+    }
+  }
+
+  /* ----- HEYGEN API: Direct video generation ----- */
+  async function sendToHeyGen() {
+    if (!apiKey) { showToast("HeyGen API-key ontbreekt"); return; }
+    if (scenes.length === 0) { showToast("Voeg eerst een script toe"); return; }
+
+    setHeygenStatus("running");
+    setHeygenLog(["🚀 Verbinding met HeyGen…"]);
+
+    try {
+      // Build video_inputs from scenes
+      const videoInputs = scenes.map((sc, i) => ({
+        character: {
+          type: "avatar",
+          avatar_id: avatarIds[sc.mimiek] || sc.mimiek, // Use stored avatar_id or fallback to mimiek ID
+        },
+        voice: {
+          type: "text",
+          input_text: sc.text,
+          voice_id: "7af5d3f2-7c2f-4888-a4be-e47b87f3fcf1", // HeyGen default voice
+        },
+      }));
+
+      setHeygenLog(prev => [...prev, `✓ Gebouwd: ${videoInputs.length} scenes`]);
+
+      // POST to HeyGen API
+      const response = await fetch("https://api.heygen.com/v1/video/generate", {
+        method: "POST",
+        headers: {
+          "X-Api-Key": apiKey,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          video_inputs: videoInputs,
+          aspect_ratio: "9:16",
+          style: "professional",
+        }),
+      });
+
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.message || `API error ${response.status}`);
+      }
+
+      const data = await response.json();
+      setVideoId(data.video_id);
+      setHeygenLog(prev => [...prev, `✓ Video-ID: ${data.video_id}`, "🔄 Rendering…"]);
+
+      // Poll for status
+      let done = false;
+      let attempts = 0;
+      const maxAttempts = 120; // 10 minutes with 5s intervals
+
+      while (!done && attempts < maxAttempts) {
+        await new Promise(r => setTimeout(r, 5000));
+        attempts++;
+
+        const statusRes = await fetch(`https://api.heygen.com/v1/video/${data.video_id}`, {
+          headers: { "X-Api-Key": apiKey },
+        });
+
+        if (!statusRes.ok) throw new Error(`Status check failed: ${statusRes.status}`);
+
+        const statusData = await statusRes.json();
+        const status = statusData.status;
+
+        if (status === "completed") {
+          setHeygenLog(prev => [...prev, `✓ Video klaar!`, `📥 ${statusData.video_url}`]);
+          setHeygenStatus("done");
+          done = true;
+          showToast("Video klaar! Download beschikbaar");
+        } else if (status === "failed") {
+          const reason = statusData.error_message || "Onbekende fout";
+          throw new Error(`Video rendering mislukt: ${reason}`);
+        } else {
+          // Updating status
+          if (attempts % 4 === 0) { // Log every 20 seconds
+            const progress = statusData.progress ? ` (${statusData.progress}%)` : "";
+            setHeygenLog(prev => [...prev, `⏳ ${status}${progress} — ${attempts * 5}s`]);
+          }
+        }
+      }
+
+      if (!done) {
+        throw new Error("Rendering timeout (10 min)");
+      }
+    } catch (err) {
+      setHeygenStatus("error");
+      setHeygenLog(prev => [...prev, `❌ Fout: ${err.message}`]);
+      showToast(`Fout: ${err.message}`);
+    }
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
+      <TopBar scenes={scenes} totalSec={totalSec} totalWords={totalWords} onSendToHeyGen={sendToHeyGen} heygenStatus={heygenStatus} canGen={scenes.length > 0 && !!apiKey} onUndo={undo} onRedo={redo} canUndo={historyIdx > 0} canRedo={historyIdx < history.length - 1} onDownload={downloadVideo} hasVideo={!!videoId} />
+
+      <main style={{ display: "grid", gridTemplateColumns: "380px 1fr 340px", flex: 1, borderTop: "1px solid var(--line)" }}>
+        {/* LEFT */}
+        <section style={{ borderRight: "1px solid var(--line)", padding: "22px 20px", background: "var(--surface)", display: "flex", flexDirection: "column", gap: 14 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+            <h2 className="serif" style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Script</h2>
+            <Pill>stap 1</Pill>
+          </div>
+          <p style={{ margin: 0, fontSize: 12.5, color: "var(--ink-2)", lineHeight: 1.55 }}>
+            Plak je script. Zet <span className="mono" style={{ background: "var(--accent-soft)", padding: "1px 5px", borderRadius: 2, color: "var(--accent)" }}>[tag]</span> voor elke scene.
+          </p>
+          <div style={{ fontSize: 11, color: "var(--ink-3)", display: "flex", flexWrap: "wrap", gap: 4 }}>
+            {mimieken.map(m => <span key={m.id} className="mono" style={{ background: "#fffdf8", border: "1px solid var(--line)", padding: "2px 6px", borderRadius: 2 }}>[{m.id}]</span>)}
+          </div>
+
+          <textarea value={script} onChange={e => setScript(e.target.value)} spellCheck={false}
+            style={{ flex: 1, minHeight: 320, resize: "vertical", border: "1px solid var(--line-2)", background: "#fffdf8", padding: 12, fontSize: 13, lineHeight: 1.65, fontFamily: "'JetBrains Mono', monospace", color: "var(--ink)", outline: "none", borderRadius: 4 }}
+          />
+          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--ink-2)" }}>
+            <input type="checkbox" checked={autoParse} onChange={e => setAutoParse(e.target.checked)} /> automatisch parsen
+          </label>
+        </section>
+
+        {/* MIDDLE */}
+        <section style={{ padding: "22px 28px", minWidth: 0, background: "var(--bg)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 16 }}>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 12 }}>
+              <h2 className="serif" style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Scenes</h2>
+              <Pill>stap 2</Pill>
+              <span style={{ fontSize: 12.5, color: "var(--ink-3)" }}>{scenes.length} · ~{fmt(totalSec)}</span>
+            </div>
+            <button onClick={copyDraaiboek} style={btn.sec}>{Ico.copy()} kopieer alles</button>
+          </div>
+
+          {scenes.length === 0 ? (
+            <div style={{ padding: "40px 24px", background: "var(--surface)", border: "1px dashed var(--line-2)", borderRadius: 4, color: "var(--ink-3)", fontSize: 13, textAlign: "center" }}>
+              Geen scenes. Plak een script met <span className="mono">[tag]</span> markers links.
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              {scenes.map((sc, i) => (
+                <SceneCard
+                  key={i}
+                  idx={i}
+                  scene={sc}
+                  mimieken={mimieken}
+                  mimiekById={mimiekById}
+                  onMimiek={(id) => setSceneMimiek(i, id)}
+                  onCopy={() => copyScene(i)}
+                  onDelete={() => deleteScene(i)}
+                  onDuplicate={() => duplicateScene(i)}
+                  isDragged={draggedIdx === i}
+                  isDraggedOver={dragOverIdx === i}
+                  onDragStart={() => setDraggedIdx(i)}
+                  onDragEnd={() => setDraggedIdx(null)}
+                  onDragOver={() => setDragOverIdx(i)}
+                  onDragLeave={() => setDragOverIdx(null)}
+                  onDrop={() => { if (draggedIdx !== null) moveScene(draggedIdx, i); setDragOverIdx(null); }}
+                  duration={getSceneDuration(i)}
+                  onDurationChange={(sec) => setSceneDuration(i, sec)}
+                />
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* RIGHT */}
+        <aside style={{ borderLeft: "1px solid var(--line)", background: "var(--surface)", padding: "22px 20px", display: "flex", flexDirection: "column", gap: 22, overflowY: "auto", maxHeight: "calc(100vh - 80px)" }}>
+
+          {/* PREVIEW */}
+          {scenes.length > 0 && (
+            <div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
+                <h2 className="serif" style={{ margin: 0, fontSize: 18, fontWeight: 500 }}>Preview</h2>
+                <Pill>live</Pill>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {/* Preview player */}
+                <div style={{ background: "var(--bg)", border: "1px solid var(--line-2)", borderRadius: 4, padding: 10, display: "flex", flexDirection: "column", gap: 8 }}>
+                  <div style={{ aspectRatio: "9/16", background: "var(--line)", borderRadius: 3, overflow: "hidden", position: "relative" }}>
+                    <img src={mimiekById[scenes[previewIdx]?.mimiek]?.src || mimieken[0]?.src} alt="preview" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                    <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, background: "linear-gradient(to top, rgba(0,0,0,0.8), transparent)", padding: "12px 8px 8px", color: "#fbf8f2", fontSize: 10, fontFamily: "'JetBrains Mono', monospace", display: "flex", justifyContent: "space-between" }}>
+                      <span>{String(previewIdx+1).padStart(2,"0")} / {String(scenes.length).padStart(2,"0")}</span>
+                      <span>{fmt(Math.round(previewTime))} / {fmt(estSec(scenes[previewIdx]?.text || ""))}</span>
+                    </div>
+                  </div>
+                  {/* Progress bar */}
+                  <div style={{ height: 3, background: "var(--line-2)", borderRadius: 2, overflow: "hidden" }}>
+                    <div style={{ height: "100%", background: "var(--accent)", width: `${(previewTime / estSec(scenes[previewIdx]?.text || "")) * 100}%`, transition: "width 0.1s" }} />
+                  </div>
+                  {/* Controls */}
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <button onClick={() => setPreviewPlaying(!previewPlaying)} style={{ ...btn.sec, flex: 1 }}>
+                      {previewPlaying ? <>⏸ Pauze</> : <>{Ico.play(12)} Play</>}
+                    </button>
+                    <button onClick={() => { setPreviewIdx(0); setPreviewTime(0); setPreviewPlaying(false); }} style={{ ...btn.sec, flex: 1 }}>
+                      ⏮ Reset
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* MIMIEKEN with upload */}
+          <div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
+              <h2 className="serif" style={{ margin: 0, fontSize: 18, fontWeight: 500 }}>Mimieken</h2>
+              <Pill>foto's</Pill>
+            </div>
+            <p style={{ margin: "0 0 10px", fontSize: 11.5, color: "var(--ink-3)", lineHeight: 1.5 }}>
+              Klik op een foto om te vervangen. Of voeg nieuwe toe.
+            </p>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+              {mimieken.map(m => (
+                <MimiekChip key={m.id} m={m}
+                  usedCount={scenes.filter(s => s.mimiek === m.id).length}
+                  onReplace={(f) => handleMimiekUpload(m.id, f)}
+                  onRemove={() => removeMimiek(m.id)}
+                />
+              ))}
+              <AddMimiekTile onAdd={addMimiek} />
+            </div>
+          </div>
+
+          {/* VOICE */}
+          <div style={{ borderTop: "1px solid var(--line)", paddingTop: 18 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
+              <h2 className="serif" style={{ margin: 0, fontSize: 18, fontWeight: 500 }}>Voice</h2>
+              <Pill>elevenlabs</Pill>
+            </div>
+            <VoiceUpload onFile={handleVoiceUpload} voiceName={voiceName} onClear={() => { setVoiceFile(null); setVoiceName(""); }} />
+            <p style={{ margin: "8px 0 0", fontSize: 11, color: "var(--ink-3)", lineHeight: 1.5 }}>
+              Upload een .mp3 / .wav van ElevenLabs, of laat leeg voor HeyGen's standaard voice.
+            </p>
+
+            {/* VOICE PREVIEW */}
+            <div style={{ borderTop: "1px solid var(--line)", marginTop: 18, paddingTop: 18 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
+                <h3 className="serif" style={{ margin: 0, fontSize: 14, fontWeight: 500 }}>Preview</h3>
+                <Pill>test</Pill>
+              </div>
+              <textarea
+                value={voicePreviewText}
+                onChange={e => setVoicePreviewText(e.target.value)}
+                placeholder="Test tekst voor voice preview…"
+                style={{ width: "100%", minHeight: 60, padding: 8, border: "1px solid var(--line-2)", borderRadius: 3, fontSize: 12, fontFamily: "'JetBrains Mono', monospace", background: "#fffdf8", outline: "none", resize: "vertical" }}
+              />
+              <button
+                onClick={previewVoice}
+                disabled={voicePreviewPlaying}
+                style={{ ...btn.primary, width: "100%", marginTop: 8, opacity: voicePreviewPlaying ? 0.6 : 1, cursor: voicePreviewPlaying ? "not-allowed" : "pointer" }}>
+                {voicePreviewPlaying ? <>⏳ Speelt af…</> : <>{Ico.play(12)} Preview voice</>}
+              </button>
+            </div>
+          </div>
+
+          {/* API KEY */}
+          <div style={{ borderTop: "1px solid var(--line)", paddingTop: 18 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
+              <h2 className="serif" style={{ margin: 0, fontSize: 18, fontWeight: 500 }}>HeyGen API</h2>
+              <Pill tone={apiKey ? "ok" : "default"}>{apiKey ? "gekoppeld" : "niet gekoppeld"}</Pill>
+            </div>
+            <div style={{ position: "relative" }}>
+              <span style={{ position: "absolute", left: 10, top: 9, color: "var(--ink-3)" }}>{Ico.key(14)}</span>
+              <input type="password" placeholder="Plak je HeyGen API-key" value={apiKey} onChange={e => setApiKey(e.target.value)}
+                style={{ width: "100%", padding: "9px 10px 9px 32px", border: "1px solid var(--line-2)", borderRadius: 4, fontSize: 12, fontFamily: "'JetBrains Mono', monospace", background: "#fffdf8", outline: "none" }} />
+            </div>
+            <p style={{ margin: "8px 0 0", fontSize: 11, color: "var(--ink-3)", lineHeight: 1.5 }}>
+              Wordt lokaal opgeslagen in je browser. HeyGen → Settings → API → "API-sleutel maken".
+            </p>
+          </div>
+
+          {/* TEMPLATES */}
+          <div style={{ borderTop: "1px solid var(--line)", paddingTop: 18 }}>
+            <h2 className="serif" style={{ margin: "0 0 10px", fontSize: 18, fontWeight: 500 }}>Templates</h2>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {TEMPLATES.map(t => (
+                <button key={t.name} onClick={() => insertTemplate(t)} style={btn.sec}>
+                  + {t.name}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* EXPORT */}
+          <div style={{ borderTop: "1px solid var(--line)", paddingTop: 18 }}>
+            <h2 className="serif" style={{ margin: "0 0 10px", fontSize: 18, fontWeight: 500 }}>Export</h2>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <button onClick={exportDraaiboek} style={btn.sec}>{Ico.dl()} Draaiboek .txt</button>
+              <button onClick={copyDraaiboek} style={btn.sec}>{Ico.copy()} Kopieer alles</button>
+            </div>
+          </div>
+        </aside>
+      </main>
+
+      {/* HEYGEN OUTPUT PANEL */}
+      {heygenLog.length > 0 && (
+        <div style={{ position: "fixed", right: 20, bottom: 20, width: 420, background: "#1c1a17", color: "#d4ccbc", borderRadius: 6, padding: 14, boxShadow: "0 12px 40px rgba(0,0,0,0.25)", zIndex: 100, maxHeight: "60vh", display: "flex", flexDirection: "column" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+            <span className="serif" style={{ color: "#fbf8f2", fontSize: 15 }}>
+              {heygenStatus === "running" ? "HeyGen renderen…" : "HeyGen output"}
+            </span>
+            <button onClick={() => { setHeygenLog([]); setHeygenStatus(null); }} style={{ color: "#8a8379" }}>{Ico.x()}</button>
+          </div>
+          <div className="mono" style={{ fontSize: 11, lineHeight: 1.55, whiteSpace: "pre-wrap", overflow: "auto", flex: 1 }}>
+            {heygenLog.join("\n")}
+            {heygenStatus === "running" && <span style={{ animation: "pulse 1s infinite" }}> ▊</span>}
+          </div>
+        </div>
+      )}
+
+      <footer style={{ borderTop: "1px solid var(--line)", padding: "12px 24px", fontSize: 11.5, color: "var(--ink-3)", display: "flex", justifyContent: "space-between", background: "var(--surface)" }}>
+        <span>Scene Studio · hajja workflow</span>
+        <span className="mono">v0.2</span>
+      </footer>
+
+      {toast && (
+        <div style={{ position: "fixed", bottom: 24, left: "50%", transform: "translateX(-50%)", background: "var(--ink)", color: "#fffdf8", padding: "10px 18px", borderRadius: 4, fontSize: 13, boxShadow: "0 8px 24px rgba(0,0,0,0.15)", display: "flex", alignItems: "center", gap: 8, zIndex: 200 }}>
+          {Ico.ok()} {toast}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ---------- subcomponents ---------- */
+
+function TopBar({ scenes, totalSec, totalWords, onSendToHeyGen, heygenStatus, canGen, onUndo, onRedo, canUndo, canRedo, onDownload, hasVideo }) {
+  return (
+    <header style={{ padding: "14px 24px", display: "flex", justifyContent: "space-between", alignItems: "center", background: "var(--surface)", gap: 20 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <div style={{ width: 32, height: 32, borderRadius: 3, background: "var(--accent)", color: "#fbf8f2", display: "grid", placeItems: "center", fontFamily: "'Fraunces', serif", fontSize: 17, fontWeight: 600 }}>S</div>
+        <div>
+          <div className="serif" style={{ fontSize: 18, lineHeight: 1, fontWeight: 500 }}>Scene Studio</div>
+          <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 2 }}>hajja · HeyGen voorbereiding</div>
+        </div>
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+        <div style={{ display: "flex", gap: 20, fontSize: 12, color: "var(--ink-2)" }}>
+          <Stat label="scenes" value={scenes.length} />
+          <Stat label="duur" value={`~${fmt(totalSec)}`} />
+          <Stat label="woorden" value={totalWords} />
+        </div>
+        <div style={{ display: "flex", gap: 6 }}>
+          <button onClick={onUndo} disabled={!canUndo} style={{ ...btn.sec, opacity: canUndo ? 1 : 0.4, cursor: canUndo ? "pointer" : "not-allowed" }} title="Undo (Ctrl+Z)">↶</button>
+          <button onClick={onRedo} disabled={!canRedo} style={{ ...btn.sec, opacity: canRedo ? 1 : 0.4, cursor: canRedo ? "pointer" : "not-allowed" }} title="Redo (Ctrl+Shift+Z)">↷</button>
+        </div>
+        <div style={{ width: 1, height: 24, background: "var(--line)" }} />
+        <button onClick={onDownload} disabled={!hasVideo} style={{ ...btn.sec, opacity: hasVideo ? 1 : 0.4, cursor: hasVideo ? "pointer" : "not-allowed" }} title="Download video">{Ico.dl()} Download</button>
+        <button onClick={onSendToHeyGen} disabled={scenes.length === 0 || !canGen || heygenStatus === "running"}
+          style={{ ...btn.primary, padding: "10px 18px", fontSize: 13.5, opacity: (canGen && heygenStatus !== "running") ? 1 : 0.5, cursor: (canGen && heygenStatus !== "running") ? "pointer" : "not-allowed", background: "var(--ok)" }}
+          title="Zend rechtstreeks naar HeyGen API">
+          {heygenStatus === "running" ? <>⏳ Renderen…</> : <>{Ico.play(14)} Zend naar HeyGen</>}
+        </button>
+      </div>
+    </header>
+  );
+}
+
+function Stat({ label, value }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
+      <div className="mono" style={{ fontSize: 9.5, letterSpacing: 0.6, textTransform: "uppercase", color: "var(--ink-3)" }}>{label}</div>
+      <div className="serif" style={{ fontSize: 16, fontWeight: 500, lineHeight: 1.1 }}>{value}</div>
+    </div>
+  );
+}
+
+function SceneCard({ idx, scene, mimieken, mimiekById, onMimiek, onCopy, onDelete, onDuplicate, isDragged, isDraggedOver, onDragStart, onDragEnd, onDragOver, onDragLeave, onDrop, duration, onDurationChange }) {
+  const m = mimiekById[scene.mimiek] || mimieken[0];
+  const [open, setOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [editingDuration, setEditingDuration] = useState(false);
+  function handleCopy() { onCopy(); setCopied(true); setTimeout(() => setCopied(false), 1200); }
+  return (
+    <article
+      draggable
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
+      onDragOver={(e) => { e.preventDefault(); onDragOver(); }}
+      onDragLeave={onDragLeave}
+      onDrop={(e) => { e.preventDefault(); onDrop(); }}
+      style={{
+        display: "grid",
+        gridTemplateColumns: "130px 1fr",
+        gap: 16,
+        background: isDraggedOver ? "var(--accent-soft)" : "var(--surface)",
+        border: `1px solid ${isDraggedOver ? "var(--accent)" : "var(--line)"}`,
+        borderRadius: 4,
+        padding: 12,
+        opacity: isDragged ? 0.5 : 1,
+        transition: "all 0.12s",
+        cursor: "grab"
+      }}
+    >
+      <div style={{ position: "relative" }}>
+        <div style={{ width: "100%", aspectRatio: "9/16", background: "var(--line)", borderRadius: 3, overflow: "hidden", position: "relative" }}>
+          <img src={m.src} alt={m.label} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+          <div style={{ position: "absolute", top: 5, left: 5, background: "rgba(28,26,23,0.75)", color: "#fbf8f2", padding: "2px 6px", borderRadius: 2, fontSize: 10, fontFamily: "'JetBrains Mono', monospace" }}>{String(idx+1).padStart(2,"0")}</div>
+        </div>
+        <div style={{ position: "relative", marginTop: 6 }}>
+          <button onClick={() => setOpen(!open)} style={{ width: "100%", padding: "6px 8px", border: "1px solid var(--line-2)", background: "#fffdf8", borderRadius: 3, fontSize: 11, fontFamily: "'JetBrains Mono', monospace", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span>{scene.mimiek}</span><span style={{ opacity: 0.5, fontSize: 9 }}>▾</span>
+          </button>
+          {open && (
+            <div style={{ position: "absolute", top: "100%", left: 0, right: 0, marginTop: 3, background: "#fffdf8", border: "1px solid var(--line-2)", borderRadius: 3, zIndex: 5, boxShadow: "0 6px 20px rgba(28,26,23,0.08)", maxHeight: 240, overflow: "auto" }}>
+              {mimieken.map(mm => (
+                <button key={mm.id} onClick={() => { onMimiek(mm.id); setOpen(false); }}
+                  style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "6px 8px", background: scene.mimiek === mm.id ? "var(--accent-soft)" : "transparent", textAlign: "left", fontSize: 11, fontFamily: "'JetBrains Mono', monospace", color: scene.mimiek === mm.id ? "var(--accent)" : "var(--ink-2)" }}>
+                  <img src={mm.src} alt="" style={{ width: 22, height: 22, borderRadius: 2, objectFit: "cover" }} />{mm.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", justifyContent: "space-between", minWidth: 0 }}>
+        <div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, flexWrap: "wrap" }}>
+            <span className="serif" style={{ fontSize: 12.5, color: "var(--ink-3)" }}>Scene {idx+1}</span>
+            <Pill tone="accent">{scene.mimiek}</Pill>
+            {!scene.valid && <Pill tone="warn">onbekende tag: {scene.rawTag}</Pill>}
+            {editingDuration ? (
+              <input type="number" min="1" max="60" value={duration} onChange={e => { onDurationChange(parseInt(e.target.value)); }} onBlur={() => setEditingDuration(false)} autoFocus
+                style={{ width: 40, padding: "2px 4px", fontSize: 11, border: "1px solid var(--accent)", borderRadius: 3, fontFamily: "'JetBrains Mono', monospace", background: "var(--accent-soft)" }} />
+            ) : (
+              <button onClick={() => setEditingDuration(true)} style={{ marginLeft: "auto", fontSize: 11, color: "var(--ink-2)", background: "transparent", padding: "2px 6px", borderRadius: 3, border: "1px solid var(--line-2)", cursor: "pointer" }} className="mono">
+                ~{duration}s
+              </button>
+            )}
+          </div>
+          <p style={{ margin: 0, fontSize: 14, lineHeight: 1.6, color: "var(--ink)", fontFamily: "'Fraunces', Georgia, serif", textWrap: "pretty" }}>{scene.text}</p>
+        </div>
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 4, marginTop: 10 }}>
+          <button onClick={handleCopy} style={btn.ghost}>{copied ? <>{Ico.ok(14)} gekopieerd</> : <>{Ico.copy(14)}</>}</button>
+          <button onClick={onDuplicate} style={btn.ghost} title="Dupliceer scene">⎘</button>
+          <button onClick={onDelete} style={{ ...btn.ghost, color: "var(--err)" }} title="Verwijder scene">✕</button>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function MimiekChip({ m, usedCount, onReplace, onRemove }) {
+  const ref = useRef(null);
+  const [hover, setHover] = useState(false);
+  return (
+    <div onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
+      style={{ position: "relative", border: "1px solid var(--line-2)", borderRadius: 3, overflow: "hidden", background: "#fffdf8" }}>
+      <div style={{ aspectRatio: "9/16", background: "var(--line)", position: "relative", cursor: "pointer" }} onClick={() => ref.current?.click()}>
+        <img src={m.src} alt={m.label} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+        {hover && (
+          <div style={{ position: "absolute", inset: 0, background: "rgba(28,26,23,0.55)", display: "grid", placeItems: "center", color: "#fbf8f2", fontSize: 11, fontWeight: 500 }}>
+            <span style={{ display: "flex", alignItems: "center", gap: 4 }}>{Ico.up(12)} vervang</span>
+          </div>
+        )}
+      </div>
+      <input ref={ref} type="file" accept="image/*" style={{ display: "none" }} onChange={e => { if (e.target.files?.[0]) onReplace(e.target.files[0]); e.target.value = ""; }} />
+      <div style={{ padding: "5px 7px" }}>
+        <div className="mono" style={{ fontSize: 10.5, color: "var(--ink)", fontWeight: 500 }}>{m.label}</div>
+        <div style={{ fontSize: 10, color: "var(--ink-3)" }}>{usedCount === 0 ? "niet gebruikt" : `${usedCount}× gebruikt`}</div>
+      </div>
+      {usedCount > 0 && (
+        <div style={{ position: "absolute", top: 5, right: 5, background: "var(--accent)", color: "#fbf8f2", width: 18, height: 18, borderRadius: "50%", display: "grid", placeItems: "center", fontSize: 10, fontWeight: 600, fontFamily: "'JetBrains Mono', monospace" }}>{usedCount}</div>
+      )}
+      {hover && usedCount === 0 && (
+        <button onClick={onRemove} title="verwijder"
+          style={{ position: "absolute", top: 4, left: 4, background: "rgba(28,26,23,0.75)", color: "#fbf8f2", width: 18, height: 18, borderRadius: "50%", display: "grid", placeItems: "center" }}>{Ico.x(10)}</button>
+      )}
+    </div>
+  );
+}
+
+function AddMimiekTile({ onAdd }) {
+  const ref = useRef(null);
+  return (
+    <div onClick={() => ref.current?.click()}
+      style={{ border: "1.5px dashed var(--line-2)", borderRadius: 3, aspectRatio: "9/16", display: "grid", placeItems: "center", cursor: "pointer", color: "var(--ink-3)", fontSize: 11, background: "#fffdf8" }}
+      onMouseEnter={e => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.color = "var(--accent)"; }}
+      onMouseLeave={e => { e.currentTarget.style.borderColor = "var(--line-2)"; e.currentTarget.style.color = "var(--ink-3)"; }}>
+      <div style={{ textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+        {Ico.plus(18)}<span>nieuwe mimiek</span>
+      </div>
+      <input ref={ref} type="file" accept="image/*" style={{ display: "none" }} onChange={e => { if (e.target.files?.[0]) onAdd(e.target.files[0]); e.target.value = ""; }} />
+    </div>
+  );
+}
+
+function VoiceUpload({ onFile, voiceName, onClear }) {
+  const ref = useRef(null);
+  const [drag, setDrag] = useState(false);
+  function handleDrop(e) {
+    e.preventDefault(); setDrag(false);
+    const f = e.dataTransfer.files?.[0];
+    if (f && (f.type.startsWith("audio/") || /\.(mp3|wav|m4a|ogg)$/i.test(f.name))) onFile(f);
+  }
+  if (voiceName) {
+    return (
+      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", background: "#fffdf8", border: "1px solid var(--line-2)", borderRadius: 4, fontSize: 12 }}>
+        <span style={{ color: "var(--ok)" }}>{Ico.mic(14)}</span>
+        <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{voiceName}</span>
+        <button onClick={onClear} style={{ color: "var(--ink-3)" }}>{Ico.x()}</button>
+      </div>
+    );
+  }
+  return (
+    <div onClick={() => ref.current?.click()}
+      onDragOver={e => { e.preventDefault(); setDrag(true); }}
+      onDragLeave={() => setDrag(false)}
+      onDrop={handleDrop}
+      style={{ border: `1.5px dashed ${drag ? "var(--accent)" : "var(--line-2)"}`, borderRadius: 4, padding: "16px 12px", display: "flex", flexDirection: "column", alignItems: "center", gap: 6, cursor: "pointer", background: drag ? "var(--accent-soft)" : "#fffdf8", color: drag ? "var(--accent)" : "var(--ink-2)", fontSize: 12, transition: "all 0.15s" }}>
+      {Ico.mic(18)}
+      <div style={{ textAlign: "center", lineHeight: 1.4 }}>
+        <div style={{ fontWeight: 500 }}>Upload voice-bestand</div>
+        <div style={{ fontSize: 11, color: "var(--ink-3)" }}>.mp3 · .wav · .m4a</div>
+      </div>
+      <input ref={ref} type="file" accept="audio/*,.mp3,.wav,.m4a" style={{ display: "none" }} onChange={e => { if (e.target.files?.[0]) onFile(e.target.files[0]); e.target.value = ""; }} />
+    </div>
+  );
+}
+
+/* ---------- button styles ---------- */
+const baseBtn = { display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 12px", fontSize: 12.5, fontWeight: 500, borderRadius: 3, border: "1px solid transparent", transition: "all 0.12s" };
+const btn = {
+  primary: { ...baseBtn, background: "var(--accent)", color: "#fbf8f2" },
+  sec:     { ...baseBtn, background: "#fffdf8", border: "1px solid var(--line-2)", color: "var(--ink)" },
+  ghost:   { ...baseBtn, background: "transparent", color: "var(--ink-2)", padding: "5px 8px" },
+};
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
