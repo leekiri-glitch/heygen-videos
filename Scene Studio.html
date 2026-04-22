@@ -418,13 +418,14 @@ function App() {
       setHeygenLog(prev => [...prev, `✓ Script klaar (${scenes.length} scenes)`]);
       setHeygenLog(prev => [...prev, "📤 Stuurt naar HeyGen…"]);
 
-      // Call backend to generate video
+      // Call backend to generate video with avatar
       const response = await fetch("/api/heygen-generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           scriptText: prompt,
-          apiKey
+          apiKey,
+          avatarId: "avt_17e95a63388a11eea55d6a7fa3e8cfa4" // Professional avatar
         })
       });
 
