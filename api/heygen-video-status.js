@@ -3,23 +3,19 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { scriptText, apiKey } = req.body;
+  const { videoId, apiKey } = req.body;
 
-  if (!scriptText || !apiKey) {
-    return res.status(400).json({ error: 'scriptText and apiKey required' });
+  if (!videoId || !apiKey) {
+    return res.status(400).json({ error: 'videoId and apiKey required' });
   }
 
   try {
-    // HeyGen v3 Video Agent API - POST /v3/video-agents
-    const response = await fetch('https://api.heygen.com/v3/video-agents', {
-      method: 'POST',
+    // HeyGen v3 Videos API - GET /v3/videos/{video_id}
+    const response = await fetch(`https://api.heygen.com/v3/videos/${videoId}`, {
+      method: 'GET',
       headers: {
         'X-Api-Key': apiKey,
-        'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        prompt: scriptText
-      }),
     });
 
     const data = await response.json();

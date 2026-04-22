@@ -412,17 +412,18 @@ function App() {
     setHeygenLog(["🚀 Video aan het genereren…"]);
 
     try {
-      // Build script from scenes
-      const scriptText = scenes.map((sc, i) => `Scene ${i + 1}: ${sc.text}`).join('\n\n');
+      // Build prompt from scenes
+      const prompt = scenes.map((sc, i) => `Scene ${i + 1}: ${sc.text}`).join('\n\n');
 
       setHeygenLog(prev => [...prev, `✓ Script klaar (${scenes.length} scenes)`]);
+      setHeygenLog(prev => [...prev, "📤 Stuurt naar HeyGen…"]);
 
       // Call backend to generate video
       const response = await fetch("/api/heygen-generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          scriptText,
+          scriptText: prompt,
           apiKey
         })
       });
@@ -433,13 +434,55 @@ function App() {
       }
 
       const data = await response.json();
-      setVideoId(data.session_id || data.video_id);
-      setHeygenLog(prev => [...prev, `✓ Video session gestart: ${data.session_id || data.video_id}`]);
-      setHeygenLog(prev => [...prev, "🔄 HeyGen is aan het renderen..."]);
-      setHeygenLog(prev => [...prev, "⏳ Dit kan 1-2 minuten duren"]);
+      const videoId = data.video_id;
+      setVideoId(videoId);
 
-      setHeygenStatus("done");
-      showToast("✅ Video aan het genereren! Check het dashboard op HeyGen.");
+      setHeygenLog(prev => [...prev, `✓ Video session: ${data.session_id}`]);
+      setHeygenLog(prev => [...prev, "🔄 HeyGen is aan het renderen..."]);
+
+      // Poll for status
+      let done = false;
+      let attempts = 0;
+      const maxAttempts = 120; // 10 minutes with 5s intervals
+
+      while (!done && attempts < maxAttempts) {
+        await new Promise(r => setTimeout(r, 5000));
+        attempts++;
+
+        const statusRes = await fetch("/api/heygen-video-status", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            videoId,
+            apiKey
+          })
+        });
+
+        if (!statusRes.ok) throw new Error(`Status check failed: ${statusRes.status}`);
+
+        const statusData = await statusRes.json();
+        const status = statusData.status;
+
+        if (status === "completed") {
+          setHeygenLog(prev => [...prev, `✓ Video klaar!`]);
+          setHeygenLog(prev => [...prev, `📥 ${statusData.video_url}`]);
+          setHeygenStatus("done");
+          done = true;
+          showToast("✅ Video klaar! Download beschikbaar");
+        } else if (status === "failed") {
+          const reason = statusData.error || "Onbekende fout";
+          throw new Error(`Video rendering mislukt: ${reason}`);
+        } else {
+          // Updating status
+          if (attempts % 4 === 0) { // Log every 20 seconds
+            setHeygenLog(prev => [...prev, `⏳ ${status} — ${attempts * 5}s`]);
+          }
+        }
+      }
+
+      if (!done) {
+        throw new Error("Rendering timeout (10 min)");
+      }
     } catch (err) {
       setHeygenStatus("error");
       setHeygenLog(prev => [...prev, `❌ Fout: ${err.message}`]);
