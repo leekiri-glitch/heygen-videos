@@ -112,6 +112,8 @@ function App() {
   const [heygenStatus, setHeygenStatus] = useState(null); // null | running | done | error
   const [heygenLog, setHeygenLog] = useState([]);
   const [videoId, setVideoId] = useState(null);
+  const [draggedIdx, setDraggedIdx] = useState(null);
+  const [dragOverIdx, setDragOverIdx] = useState(null);
 
   const mimiekIds = useMemo(() => mimieken.map(m => m.id), [mimieken]);
   const mimiekById = useMemo(() => Object.fromEntries(mimieken.map(m => [m.id, m])), [mimieken]);
@@ -166,6 +168,15 @@ function App() {
 
   function copyScene(idx) {
     navigator.clipboard.writeText(scenes[idx].text).then(() => showToast(`Scene ${idx+1} gekopieerd`));
+  }
+
+  function moveScene(fromIdx, toIdx) {
+    if (fromIdx === toIdx) return;
+    const newScenes = [...scenes];
+    const [dragged] = newScenes.splice(fromIdx, 1);
+    newScenes.splice(toIdx, 0, dragged);
+    setScenes(newScenes);
+    showToast(`Scene ${fromIdx+1} verplaatst naar ${toIdx+1}`);
   }
 
   function copyDraaiboek() {
@@ -374,7 +385,22 @@ Please:
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               {scenes.map((sc, i) => (
-                <SceneCard key={i} idx={i} scene={sc} mimieken={mimieken} mimiekById={mimiekById} onMimiek={(id) => setSceneMimiek(i, id)} onCopy={() => copyScene(i)} />
+                <SceneCard
+                  key={i}
+                  idx={i}
+                  scene={sc}
+                  mimieken={mimieken}
+                  mimiekById={mimiekById}
+                  onMimiek={(id) => setSceneMimiek(i, id)}
+                  onCopy={() => copyScene(i)}
+                  isDragged={draggedIdx === i}
+                  isDraggedOver={dragOverIdx === i}
+                  onDragStart={() => setDraggedIdx(i)}
+                  onDragEnd={() => setDraggedIdx(null)}
+                  onDragOver={() => setDragOverIdx(i)}
+                  onDragLeave={() => setDragOverIdx(null)}
+                  onDrop={() => { if (draggedIdx !== null) moveScene(draggedIdx, i); setDragOverIdx(null); }}
+                />
               ))}
             </div>
           )}
@@ -533,13 +559,32 @@ function Stat({ label, value }) {
   );
 }
 
-function SceneCard({ idx, scene, mimieken, mimiekById, onMimiek, onCopy }) {
+function SceneCard({ idx, scene, mimieken, mimiekById, onMimiek, onCopy, isDragged, isDraggedOver, onDragStart, onDragEnd, onDragOver, onDragLeave, onDrop }) {
   const m = mimiekById[scene.mimiek] || mimieken[0];
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   function handleCopy() { onCopy(); setCopied(true); setTimeout(() => setCopied(false), 1200); }
   return (
-    <article style={{ display: "grid", gridTemplateColumns: "130px 1fr", gap: 16, background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 4, padding: 12 }}>
+    <article
+      draggable
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
+      onDragOver={(e) => { e.preventDefault(); onDragOver(); }}
+      onDragLeave={onDragLeave}
+      onDrop={(e) => { e.preventDefault(); onDrop(); }}
+      style={{
+        display: "grid",
+        gridTemplateColumns: "130px 1fr",
+        gap: 16,
+        background: isDraggedOver ? "var(--accent-soft)" : "var(--surface)",
+        border: `1px solid ${isDraggedOver ? "var(--accent)" : "var(--line)"}`,
+        borderRadius: 4,
+        padding: 12,
+        opacity: isDragged ? 0.5 : 1,
+        transition: "all 0.12s",
+        cursor: "grab"
+      }}
+    >
       <div style={{ position: "relative" }}>
         <div style={{ width: "100%", aspectRatio: "9/16", background: "var(--line)", borderRadius: 3, overflow: "hidden", position: "relative" }}>
           <img src={m.src} alt={m.label} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
