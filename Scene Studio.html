@@ -151,6 +151,12 @@ function App() {
     return s ? JSON.parse(s) : {};
   });
   const [uploadingAvatars, setUploadingAvatars] = useState({});
+  const [sceneTiming, setSceneTiming] = useState(() => {
+    const s = localStorage.getItem("ss_scene_timing");
+    return s ? JSON.parse(s) : {};
+  });
+  const [history, setHistory] = useState([scenes]);
+  const [historyIdx, setHistoryIdx] = useState(0);
 
   const mimiekIds = useMemo(() => mimieken.map(m => m.id), [mimieken]);
   const mimiekById = useMemo(() => Object.fromEntries(mimieken.map(m => [m.id, m])), [mimieken]);
@@ -163,6 +169,16 @@ function App() {
   useEffect(() => { localStorage.setItem("ss_mimieken_v2", JSON.stringify(mimieken)); }, [mimieken]);
   useEffect(() => { if (apiKey) localStorage.setItem("ss_api_key", apiKey); }, [apiKey]);
   useEffect(() => { localStorage.setItem("ss_avatar_ids", JSON.stringify(avatarIds)); }, [avatarIds]);
+  useEffect(() => { localStorage.setItem("ss_scene_timing", JSON.stringify(sceneTiming)); }, [sceneTiming]);
+
+  useEffect(() => {
+    if (historyIdx < history.length - 1) {
+      setHistory(prev => prev.slice(0, historyIdx + 1));
+      setHistoryIdx(prev => prev + 1);
+    }
+    setHistory(prev => [...prev, scenes]);
+    setHistoryIdx(prev => prev + 1);
+  }, [scenes]);
 
   useEffect(() => {
     if (!previewPlaying || scenes.length === 0) return;
@@ -258,6 +274,55 @@ function App() {
     showToast(`Template "${template.name}" ingevoegd`);
   }
 
+  function deleteScene(idx) {
+    setScenes(prev => prev.filter((_, i) => i !== idx));
+    showToast(`Scene ${idx+1} verwijderd`);
+  }
+
+  function duplicateScene(idx) {
+    const scene = scenes[idx];
+    const newScene = { ...scene, id: Math.max(...scenes.map(s => s.id), 0) + 1 };
+    setScenes(prev => [...prev.slice(0, idx+1), newScene, ...prev.slice(idx+1)]);
+    showToast(`Scene ${idx+1} gedupliceerd`);
+  }
+
+  function undo() {
+    if (historyIdx > 0) {
+      const newIdx = historyIdx - 1;
+      setHistoryIdx(newIdx);
+      setScenes(history[newIdx]);
+      showToast("Ongedaan gemaakt");
+    }
+  }
+
+  function redo() {
+    if (historyIdx < history.length - 1) {
+      const newIdx = historyIdx + 1;
+      setHistoryIdx(newIdx);
+      setScenes(history[newIdx]);
+      showToast("Opnieuw gedaan");
+    }
+  }
+
+  function getSceneDuration(idx) {
+    return sceneTiming[scenes[idx]?.id] || estSec(scenes[idx]?.text || "");
+  }
+
+  function setSceneDuration(idx, sec) {
+    setSceneTiming(prev => ({ ...prev, [scenes[idx].id]: Math.max(1, sec) }));
+  }
+
+  useEffect(() => {
+    function handleKeyDown(e) {
+      if (e.ctrlKey || e.metaKey) {
+        if (e.key === "z" && !e.shiftKey) { e.preventDefault(); undo(); }
+        if ((e.key === "z" && e.shiftKey) || (e.key === "y")) { e.preventDefault(); redo(); }
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [historyIdx, history]);
+
   function handleVoiceUpload(file) {
     setVoiceFile(file);
     setVoiceName(file.name);
@@ -289,6 +354,12 @@ function App() {
     const blob = new Blob([header + lines.join("\n")], { type: "text/plain" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a"); a.href = url; a.download = `draaiboek_${Date.now()}.txt`; a.click();
+  }
+
+  function downloadVideo() {
+    if (!videoId) { showToast("Geen video om te downloaden"); return; }
+    setHeygenLog(prev => [...prev, "📥 Download starten…"]);
+    showToast("Download gestart");
   }
 
   /* ----- HEYGEN API: Direct video generation ----- */
@@ -357,16 +428,18 @@ function App() {
         const status = statusData.status;
 
         if (status === "completed") {
-          setHeygenLog(prev => [...prev, `✓ Video klaar! URL: ${statusData.video_url}`]);
+          setHeygenLog(prev => [...prev, `✓ Video klaar!`, `📥 ${statusData.video_url}`]);
           setHeygenStatus("done");
           done = true;
-          showToast("Video klaar! Gedownload → URL is zichtbaar");
+          showToast("Video klaar! Download beschikbaar");
         } else if (status === "failed") {
-          throw new Error("Video rendering mislukt");
+          const reason = statusData.error_message || "Onbekende fout";
+          throw new Error(`Video rendering mislukt: ${reason}`);
         } else {
           // Updating status
           if (attempts % 4 === 0) { // Log every 20 seconds
-            setHeygenLog(prev => [...prev, `⏳ Status: ${status} (${attempts * 5}s)`]);
+            const progress = statusData.progress ? ` (${statusData.progress}%)` : "";
+            setHeygenLog(prev => [...prev, `⏳ ${status}${progress} — ${attempts * 5}s`]);
           }
         }
       }
@@ -383,7 +456,7 @@ function App() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
-      <TopBar scenes={scenes} totalSec={totalSec} totalWords={totalWords} onSendToHeyGen={sendToHeyGen} heygenStatus={heygenStatus} canGen={scenes.length > 0 && !!apiKey} />
+      <TopBar scenes={scenes} totalSec={totalSec} totalWords={totalWords} onSendToHeyGen={sendToHeyGen} heygenStatus={heygenStatus} canGen={scenes.length > 0 && !!apiKey} onUndo={undo} onRedo={redo} canUndo={historyIdx > 0} canRedo={historyIdx < history.length - 1} onDownload={downloadVideo} hasVideo={!!videoId} />
 
       <main style={{ display: "grid", gridTemplateColumns: "380px 1fr 340px", flex: 1, borderTop: "1px solid var(--line)" }}>
         {/* LEFT */}
@@ -433,6 +506,8 @@ function App() {
                   mimiekById={mimiekById}
                   onMimiek={(id) => setSceneMimiek(i, id)}
                   onCopy={() => copyScene(i)}
+                  onDelete={() => deleteScene(i)}
+                  onDuplicate={() => duplicateScene(i)}
                   isDragged={draggedIdx === i}
                   isDraggedOver={dragOverIdx === i}
                   onDragStart={() => setDraggedIdx(i)}
@@ -440,6 +515,8 @@ function App() {
                   onDragOver={() => setDragOverIdx(i)}
                   onDragLeave={() => setDragOverIdx(null)}
                   onDrop={() => { if (draggedIdx !== null) moveScene(draggedIdx, i); setDragOverIdx(null); }}
+                  duration={getSceneDuration(i)}
+                  onDurationChange={(sec) => setSceneDuration(i, sec)}
                 />
               ))}
             </div>
@@ -588,7 +665,7 @@ function App() {
 
 /* ---------- subcomponents ---------- */
 
-function TopBar({ scenes, totalSec, totalWords, onSendToHeyGen, heygenStatus, canGen }) {
+function TopBar({ scenes, totalSec, totalWords, onSendToHeyGen, heygenStatus, canGen, onUndo, onRedo, canUndo, canRedo, onDownload, hasVideo }) {
   return (
     <header style={{ padding: "14px 24px", display: "flex", justifyContent: "space-between", alignItems: "center", background: "var(--surface)", gap: 20 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -598,12 +675,18 @@ function TopBar({ scenes, totalSec, totalWords, onSendToHeyGen, heygenStatus, ca
           <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 2 }}>hajja · HeyGen voorbereiding</div>
         </div>
       </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 22 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
         <div style={{ display: "flex", gap: 20, fontSize: 12, color: "var(--ink-2)" }}>
           <Stat label="scenes" value={scenes.length} />
           <Stat label="duur" value={`~${fmt(totalSec)}`} />
           <Stat label="woorden" value={totalWords} />
         </div>
+        <div style={{ display: "flex", gap: 6 }}>
+          <button onClick={onUndo} disabled={!canUndo} style={{ ...btn.sec, opacity: canUndo ? 1 : 0.4, cursor: canUndo ? "pointer" : "not-allowed" }} title="Undo (Ctrl+Z)">↶</button>
+          <button onClick={onRedo} disabled={!canRedo} style={{ ...btn.sec, opacity: canRedo ? 1 : 0.4, cursor: canRedo ? "pointer" : "not-allowed" }} title="Redo (Ctrl+Shift+Z)">↷</button>
+        </div>
+        <div style={{ width: 1, height: 24, background: "var(--line)" }} />
+        <button onClick={onDownload} disabled={!hasVideo} style={{ ...btn.sec, opacity: hasVideo ? 1 : 0.4, cursor: hasVideo ? "pointer" : "not-allowed" }} title="Download video">{Ico.dl()} Download</button>
         <button onClick={onSendToHeyGen} disabled={scenes.length === 0 || !canGen || heygenStatus === "running"}
           style={{ ...btn.primary, padding: "10px 18px", fontSize: 13.5, opacity: (canGen && heygenStatus !== "running") ? 1 : 0.5, cursor: (canGen && heygenStatus !== "running") ? "pointer" : "not-allowed", background: "var(--ok)" }}
           title="Zend rechtstreeks naar HeyGen API">
@@ -623,10 +706,11 @@ function Stat({ label, value }) {
   );
 }
 
-function SceneCard({ idx, scene, mimieken, mimiekById, onMimiek, onCopy, isDragged, isDraggedOver, onDragStart, onDragEnd, onDragOver, onDragLeave, onDrop }) {
+function SceneCard({ idx, scene, mimieken, mimiekById, onMimiek, onCopy, onDelete, onDuplicate, isDragged, isDraggedOver, onDragStart, onDragEnd, onDragOver, onDragLeave, onDrop, duration, onDurationChange }) {
   const m = mimiekById[scene.mimiek] || mimieken[0];
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [editingDuration, setEditingDuration] = useState(false);
   function handleCopy() { onCopy(); setCopied(true); setTimeout(() => setCopied(false), 1200); }
   return (
     <article
@@ -672,16 +756,25 @@ function SceneCard({ idx, scene, mimieken, mimiekById, onMimiek, onCopy, isDragg
       </div>
       <div style={{ display: "flex", flexDirection: "column", justifyContent: "space-between", minWidth: 0 }}>
         <div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, flexWrap: "wrap" }}>
             <span className="serif" style={{ fontSize: 12.5, color: "var(--ink-3)" }}>Scene {idx+1}</span>
             <Pill tone="accent">{scene.mimiek}</Pill>
             {!scene.valid && <Pill tone="warn">onbekende tag: {scene.rawTag}</Pill>}
-            <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--ink-3)" }} className="mono">~{estSec(scene.text)}s</span>
+            {editingDuration ? (
+              <input type="number" min="1" max="60" value={duration} onChange={e => { onDurationChange(parseInt(e.target.value)); }} onBlur={() => setEditingDuration(false)} autoFocus
+                style={{ width: 40, padding: "2px 4px", fontSize: 11, border: "1px solid var(--accent)", borderRadius: 3, fontFamily: "'JetBrains Mono', monospace", background: "var(--accent-soft)" }} />
+            ) : (
+              <button onClick={() => setEditingDuration(true)} style={{ marginLeft: "auto", fontSize: 11, color: "var(--ink-2)", background: "transparent", padding: "2px 6px", borderRadius: 3, border: "1px solid var(--line-2)", cursor: "pointer" }} className="mono">
+                ~{duration}s
+              </button>
+            )}
           </div>
           <p style={{ margin: 0, fontSize: 14, lineHeight: 1.6, color: "var(--ink)", fontFamily: "'Fraunces', Georgia, serif", textWrap: "pretty" }}>{scene.text}</p>
         </div>
-        <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 10 }}>
-          <button onClick={handleCopy} style={btn.ghost}>{copied ? <>{Ico.ok()} gekopieerd</> : <>{Ico.copy()} kopieer tekst</>}</button>
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 4, marginTop: 10 }}>
+          <button onClick={handleCopy} style={btn.ghost}>{copied ? <>{Ico.ok(14)} gekopieerd</> : <>{Ico.copy(14)}</>}</button>
+          <button onClick={onDuplicate} style={btn.ghost} title="Dupliceer scene">⎘</button>
+          <button onClick={onDelete} style={{ ...btn.ghost, color: "var(--err)" }} title="Verwijder scene">✕</button>
         </div>
       </div>
     </article>
