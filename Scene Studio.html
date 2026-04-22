@@ -403,40 +403,48 @@ function App() {
     }
   }
 
-  /* ----- Scene Studio to HeyGen Video Generation via /heygen-video skill ----- */
-  function sendToHeyGen() {
+  /* ----- HeyGen Video Generation via v3 API ----- */
+  async function sendToHeyGen() {
+    if (!apiKey) { showToast("HeyGen API-key ontbreekt"); return; }
     if (scenes.length === 0) { showToast("Voeg eerst scenes toe"); return; }
 
     setHeygenStatus("running");
+    setHeygenLog(["🚀 Video aan het genereren…"]);
 
-    // Build elegant script from scenes
-    const scriptLines = scenes.map((sc, i) => `Scene ${i + 1}: ${sc.text}`).join('\n');
-    const scriptPreview = `📺 Scene Studio Script:\n\n${scriptLines}`;
+    try {
+      // Build script from scenes
+      const scriptText = scenes.map((sc, i) => `Scene ${i + 1}: ${sc.text}`).join('\n\n');
 
-    // Build HeyGen video command
-    const heygenCommand = `/heygen-video Create a professional 9:16 video with these scenes:\n\n${scriptLines}\n\nUse professional style and portrait format.`;
+      setHeygenLog(prev => [...prev, `✓ Script klaar (${scenes.length} scenes)`]);
 
-    setHeygenLog([
-      "✅ Script gegenereerd!",
-      scriptPreview,
-      "",
-      "📋 Copy dit commando naar Claude Code:",
-      "━".repeat(50),
-      heygenCommand,
-      "━".repeat(50),
-      "",
-      "Plak het in Claude Code en het video wordt gegenereerd!"
-    ]);
+      // Call backend to generate video
+      const response = await fetch("/api/heygen-generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          scriptText,
+          apiKey
+        })
+      });
 
-    setHeygenStatus("ready_to_submit");
-    showToast("Script klaar! Kopieer naar Claude Code /heygen-video");
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || `Error ${response.status}`);
+      }
 
-    // Auto-copy to clipboard
-    navigator.clipboard.writeText(heygenCommand).then(() => {
-      showToast("✅ Commando naar clipboard gekopieerd!");
-    }).catch(() => {
-      showToast("(Kopieren failed - copy handmatig)");
-    });
+      const data = await response.json();
+      setVideoId(data.session_id || data.video_id);
+      setHeygenLog(prev => [...prev, `✓ Video session gestart: ${data.session_id || data.video_id}`]);
+      setHeygenLog(prev => [...prev, "🔄 HeyGen is aan het renderen..."]);
+      setHeygenLog(prev => [...prev, "⏳ Dit kan 1-2 minuten duren"]);
+
+      setHeygenStatus("done");
+      showToast("✅ Video aan het genereren! Check het dashboard op HeyGen.");
+    } catch (err) {
+      setHeygenStatus("error");
+      setHeygenLog(prev => [...prev, `❌ Fout: ${err.message}`]);
+      showToast(`Fout: ${err.message}`);
+    }
   }
 
   return (
