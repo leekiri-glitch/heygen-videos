@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Proxy Test</title>
+  <style>
+    body { font-family: monospace; padding: 20px; background: #f5f5f5; }
+    .box { background: white; padding: 15px; margin: 10px 0; border-radius: 5px; }
+    .error { color: red; }
+    .success { color: green; }
+    button { padding: 10px; margin: 5px; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <h1>🔧 Scene Studio - Proxy Diagnostic</h1>
+
+  <div class="box">
+    <h3>API Key Input</h3>
+    <input type="password" id="apiKey" placeholder="Voer je HeyGen API key in" style="width: 100%; padding: 8px;">
+    <p style="font-size: 12px; color: #999;">Alleen voor diagnostiek - niet opgeslagen</p>
+  </div>
+
+  <div class="box">
+    <h3>Test Proxy Endpoints</h3>
+    <button onclick="testProxy()">✅ Test /api/heygen-proxy</button>
+    <button onclick="testStatus()">✅ Test /api/heygen-status</button>
+    <button onclick="clearLog()">Clear Log</button>
+  </div>
+
+  <div class="box">
+    <h3>📋 Debug Log</h3>
+    <pre id="log" style="background: #f0f0f0; padding: 10px; border-radius: 3px; overflow-x: auto;"></pre>
+  </div>
+
+  <script>
+    const log = document.getElementById('log');
+
+    function addLog(msg, isError = false) {
+      const time = new Date().toLocaleTimeString();
+      const line = `[${time}] ${msg}`;
+      log.textContent += line + '\n';
+      log.scrollTop = log.scrollHeight;
+      if (isError) console.error(msg);
+      else console.log(msg);
+    }
+
+    function clearLog() {
+      log.textContent = '';
+    }
+
+    async function testProxy() {
+      const apiKey = document.getElementById('apiKey').value;
+      if (!apiKey) {
+        addLog('❌ API key is required!', true);
+        return;
+      }
+
+      addLog('🚀 Testing /api/heygen-proxy...');
+
+      try {
+        const response = await fetch('/api/heygen-proxy', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            apiKey,
+            endpoint: '/v1/voice_preview',
+            data: {
+              text: 'Test voice',
+              voice_id: '7af5d3f2-7c2f-4888-a4be-e47b87f3fcf1'
+            }
+          })
+        });
+
+        addLog(`📶 Response status: ${response.status} ${response.statusText}`);
+
+        const data = await response.json();
+        if (response.ok) {
+          addLog('✅ Proxy is working! Response received:');
+          addLog(JSON.stringify(data, null, 2));
+        } else {
+          addLog('❌ Proxy returned error:', true);
+          addLog(JSON.stringify(data, null, 2));
+        }
+      } catch (error) {
+        addLog(`❌ Fetch failed: ${error.message}`, true);
+        addLog('Possible causes:', true);
+        addLog('  - Endpoint /api/heygen-proxy does not exist');
+        addLog('  - Network is unreachable');
+        addLog('  - CORS issue (check browser console)');
+      }
+    }
+
+    async function testStatus() {
+      const apiKey = document.getElementById('apiKey').value;
+      if (!apiKey) {
+        addLog('❌ API key is required!', true);
+        return;
+      }
+
+      addLog('🚀 Testing /api/heygen-status...');
+
+      try {
+        const response = await fetch('/api/heygen-status', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            apiKey,
+            videoId: 'test-video-id'
+          })
+        });
+
+        addLog(`📶 Response status: ${response.status} ${response.statusText}`);
+
+        const data = await response.json();
+        addLog('Response received:');
+        addLog(JSON.stringify(data, null, 2));
+      } catch (error) {
+        addLog(`❌ Fetch failed: ${error.message}`, true);
+      }
+    }
+
+    // Initial message
+    addLog('🏥 Scene Studio Proxy Diagnostic Tool');
+    addLog('1. Enter your HeyGen API key');
+    addLog('2. Click a test button');
+    addLog('3. Check the log for results');
+  </script>
+</body>
+</html>
