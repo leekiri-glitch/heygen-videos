@@ -709,13 +709,31 @@ function App() {
 
       {/* HEYGEN OUTPUT PANEL */}
       {heygenLog.length > 0 && (
-        <div style={{ position: "fixed", right: 20, bottom: 20, width: 420, background: "#1c1a17", color: "#d4ccbc", borderRadius: 6, padding: 14, boxShadow: "0 12px 40px rgba(0,0,0,0.25)", zIndex: 100, maxHeight: "60vh", display: "flex", flexDirection: "column" }}>
+        <div style={{ position: "fixed", right: 20, bottom: 20, width: heygenStatus === "done" ? 540 : 420, background: "#1c1a17", color: "#d4ccbc", borderRadius: 6, padding: 14, boxShadow: "0 12px 40px rgba(0,0,0,0.25)", zIndex: 100, maxHeight: "80vh", display: "flex", flexDirection: "column" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
             <span className="serif" style={{ color: "#fbf8f2", fontSize: 15 }}>
-              {heygenStatus === "running" ? "HeyGen renderen…" : "HeyGen output"}
+              {heygenStatus === "running" ? "🎬 HeyGen renderen…" : heygenStatus === "done" ? "✅ Video klaar!" : "📋 HeyGen output"}
             </span>
-            <button onClick={() => { setHeygenLog([]); setHeygenStatus(null); }} style={{ color: "#8a8379" }}>{Ico.x()}</button>
+            <button onClick={() => { setHeygenLog([]); setHeygenStatus(null); setVideoId(null); }} style={{ color: "#8a8379" }}>{Ico.x()}</button>
           </div>
+
+          {/* VIDEO PREVIEW */}
+          {heygenStatus === "done" && videoId && heygenLog.length > 0 && heygenLog.some(line => line.includes("files.heygen.com")) && (
+            <div style={{ marginBottom: 12, borderRadius: 4, overflow: "hidden", background: "#0a0806" }}>
+              <video
+                style={{ width: "100%", display: "block", background: "#000" }}
+                controls
+                src={heygenLog.find(line => line.includes("files.heygen.com"))?.match(/https:\/\/[^\s]+/)?.[0]}
+              />
+              <div style={{ padding: "12px 12px 0", display: "flex", gap: 8 }}>
+                <a href={heygenLog.find(line => line.includes("files.heygen.com"))?.match(/https:\/\/[^\s]+/)?.[0]} target="_blank" rel="noopener noreferrer"
+                  style={{ flex: 1, padding: "8px 12px", background: "var(--ok)", color: "#fbf8f2", textAlign: "center", borderRadius: 3, textDecoration: "none", fontSize: 12, fontWeight: 500, cursor: "pointer" }}>
+                  {Ico.dl(14)} Download MP4
+                </a>
+              </div>
+            </div>
+          )}
+
           <div className="mono" style={{ fontSize: 11, lineHeight: 1.55, whiteSpace: "pre-wrap", overflow: "auto", flex: 1 }}>
             {heygenLog.join("\n")}
             {heygenStatus === "running" && <span style={{ animation: "pulse 1s infinite" }}> ▊</span>}
