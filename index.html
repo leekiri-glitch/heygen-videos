@@ -135,6 +135,7 @@ function App() {
   const [scenes, setScenes] = useState([]);
   const [autoParse, setAutoParse] = useState(true);
   const [apiKey, setApiKey] = useState(() => localStorage.getItem("ss_api_key") || "");
+  const [avatarId, setAvatarId] = useState(() => localStorage.getItem("ss_avatar_id") || "avt_17e95a63388a11eea55d6a7fa3e8cfa4");
   const [voiceFile, setVoiceFile] = useState(null);
   const [voiceName, setVoiceName] = useState("");
   const [toast, setToast] = useState(null);
@@ -170,6 +171,7 @@ function App() {
 
   useEffect(() => { localStorage.setItem("ss_mimieken_v2", JSON.stringify(mimieken)); }, [mimieken]);
   useEffect(() => { if (apiKey) localStorage.setItem("ss_api_key", apiKey); }, [apiKey]);
+  useEffect(() => { if (avatarId) localStorage.setItem("ss_avatar_id", avatarId); }, [avatarId]);
   useEffect(() => { localStorage.setItem("ss_avatar_ids", JSON.stringify(avatarIds)); }, [avatarIds]);
   useEffect(() => { localStorage.setItem("ss_scene_timing", JSON.stringify(sceneTiming)); }, [sceneTiming]);
 
@@ -425,7 +427,7 @@ function App() {
         body: JSON.stringify({
           scriptText: prompt,
           apiKey,
-          avatarId: "avt_17e95a63388a11eea55d6a7fa3e8cfa4" // Professional avatar
+          avatarId: avatarId || "avt_17e95a63388a11eea55d6a7fa3e8cfa4"
         })
       });
 
@@ -665,6 +667,21 @@ function App() {
             <p style={{ margin: "8px 0 0", fontSize: 11, color: "var(--ink-3)", lineHeight: 1.5 }}>
               Wordt lokaal opgeslagen in je browser. HeyGen → Settings → API → "API-sleutel maken".
             </p>
+
+            <div style={{ marginTop: 16 }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 6, margin: "0 0 8px", fontSize: 12, fontWeight: 500 }}>
+                🎭 Avatar ID
+                <Pill tone={avatarId ? "ok" : "warn"}>{avatarId ? "ingesteld" : "default"}</Pill>
+              </label>
+              <div style={{ position: "relative" }}>
+                <span style={{ position: "absolute", left: 10, top: 9, color: "var(--ink-3)" }}>🎬</span>
+                <input type="text" placeholder="avt_17e95a63388a11eea55d6a7fa3e8cfa4" value={avatarId} onChange={e => setAvatarId(e.target.value)}
+                  style={{ width: "100%", padding: "9px 10px 9px 32px", border: "1px solid var(--line-2)", borderRadius: 4, fontSize: 12, fontFamily: "'JetBrains Mono', monospace", background: "#fffdf8", outline: "none" }} />
+              </div>
+              <p style={{ margin: "8px 0 0", fontSize: 11, color: "var(--ink-3)", lineHeight: 1.5 }}>
+                Paste de avatar ID van HeyGen. Alle scenes gebruiken dezelfde avatar.
+              </p>
+            </div>
           </div>
 
           {/* TEMPLATES */}
