@@ -106,8 +106,6 @@ function App() {
   const [apiKey, setApiKey] = useState(() => localStorage.getItem("ss_api_key") || "");
   const [voiceFile, setVoiceFile] = useState(null);
   const [voiceName, setVoiceName] = useState("");
-  const [genStatus, setGenStatus] = useState(null); // null | running | done | error
-  const [genLog, setGenLog] = useState([]);
   const [toast, setToast] = useState(null);
   const [heygenStatus, setHeygenStatus] = useState(null); // null | running | done | error
   const [heygenLog, setHeygenLog] = useState([]);
@@ -217,64 +215,6 @@ function App() {
     const a = document.createElement("a"); a.href = url; a.download = `draaiboek_${Date.now()}.txt`; a.click();
   }
 
-  /* ----- GENERATE: builds a ready-to-paste Claude Code prompt ----- */
-  async function generateVideo() {
-    if (scenes.length === 0) { showToast("Voeg eerst een script toe"); return; }
-    setGenStatus("running");
-    setGenLog([]);
-
-    const sceneLines = scenes.map((sc, i) =>
-      `${String(i+1).padStart(2,"0")}. [${sc.mimiek}] (~${estSec(sc.text)}s) — ${sc.text}`
-    ).join("\n");
-
-    const mimiekList = mimieken.map(m => `   - ${m.label} → foto: ${m.src.startsWith("data:") ? "(upload lokaal)" : m.src}`).join("\n");
-
-    const prompt =
-`Install the HeyGen skills from github.com/heygen-com/skills (follow their README).
-Then use heygen-video to generate ONE video combining all scenes below.
-
-My ${mimieken.length} avatars (Photo Avatars):
-${mimiekList}
-
-${voiceName ? `Voice: use my custom voice file "${voiceName}" (I'll upload it).` : `Voice: use a suitable HeyGen default voice (ask me if unclear).`}
-${apiKey ? `My HeyGen API key: ${apiKey}` : `Ask me for my HeyGen API key before starting.`}
-
-Script (${scenes.length} scenes, ~${fmt(totalSec)} total):
-${sceneLines}
-
-Please:
-1. Upload each photo as a HeyGen Photo Avatar if not already uploaded
-2. Build video_inputs array: one entry per scene, correct avatar per [tag]
-3. Submit and poll until the render completes
-4. Give me the final video URL`;
-
-    const steps = [
-      "✓ Script geparsed (" + scenes.length + " scenes)",
-      "✓ Mimieken gekoppeld (" + mimieken.length + " avatars)",
-      voiceName ? "✓ Voice: " + voiceName : "○ Voice: HeyGen default",
-      apiKey ? "✓ API-key meegegeven" : "○ API-key: Claude vraagt erom",
-      "",
-      "➜ Claude Code prompt klaar (zie hieronder)",
-      "➜ Kopieer prompt → plak in Claude Code",
-      "➜ HeyGen skills doen de rest",
-      "",
-      "──────── KOPIEER DIT NAAR CLAUDE CODE ────────",
-      "",
-      prompt,
-    ];
-    for (const step of steps) {
-      await new Promise(r => setTimeout(r, 90));
-      setGenLog(prev => [...prev, step]);
-    }
-    setGenStatus("done");
-
-    // Auto-copy the prompt
-    try {
-      await navigator.clipboard.writeText(prompt);
-      showToast("Prompt gekopieerd — plak in Claude Code");
-    } catch {}
-  }
-
   /* ----- HEYGEN API: Direct video generation ----- */
   async function sendToHeyGen() {
     if (!apiKey) { showToast("HeyGen API-key ontbreekt"); return; }
@@ -367,7 +307,7 @@ Please:
 
   return (
     <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
-      <TopBar scenes={scenes} totalSec={totalSec} totalWords={totalWords} onGenerate={generateVideo} genStatus={genStatus} canGen={scenes.length > 0 && !!apiKey} onSendToHeyGen={sendToHeyGen} heygenStatus={heygenStatus} />
+      <TopBar scenes={scenes} totalSec={totalSec} totalWords={totalWords} onSendToHeyGen={sendToHeyGen} heygenStatus={heygenStatus} canGen={scenes.length > 0 && !!apiKey} />
 
       <main style={{ display: "grid", gridTemplateColumns: "380px 1fr 340px", flex: 1, borderTop: "1px solid var(--line)" }}>
         {/* LEFT */}
@@ -547,22 +487,6 @@ Please:
         </div>
       )}
 
-      {/* GENERATE OUTPUT PANEL */}
-      {genLog.length > 0 && (
-        <div style={{ position: "fixed", right: 20, bottom: heygenLog.length > 0 ? "calc(20px + 60vh)" : 20, width: 420, background: "#1c1a17", color: "#d4ccbc", borderRadius: 6, padding: 14, boxShadow: "0 12px 40px rgba(0,0,0,0.25)", zIndex: 99, maxHeight: "60vh", display: "flex", flexDirection: "column" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-            <span className="serif" style={{ color: "#fbf8f2", fontSize: 15 }}>
-              {genStatus === "running" ? "Bezig met genereren…" : "Generator output"}
-            </span>
-            <button onClick={() => { setGenLog([]); setGenStatus(null); }} style={{ color: "#8a8379" }}>{Ico.x()}</button>
-          </div>
-          <div className="mono" style={{ fontSize: 11, lineHeight: 1.55, whiteSpace: "pre-wrap", overflow: "auto", flex: 1 }}>
-            {genLog.join("\n")}
-            {genStatus === "running" && <span style={{ animation: "pulse 1s infinite" }}> ▊</span>}
-          </div>
-        </div>
-      )}
-
       <footer style={{ borderTop: "1px solid var(--line)", padding: "12px 24px", fontSize: 11.5, color: "var(--ink-3)", display: "flex", justifyContent: "space-between", background: "var(--surface)" }}>
         <span>Scene Studio · hajja workflow</span>
         <span className="mono">v0.2</span>
@@ -579,7 +503,7 @@ Please:
 
 /* ---------- subcomponents ---------- */
 
-function TopBar({ scenes, totalSec, totalWords, onGenerate, genStatus, canGen, onSendToHeyGen, heygenStatus }) {
+function TopBar({ scenes, totalSec, totalWords, onSendToHeyGen, heygenStatus, canGen }) {
   return (
     <header style={{ padding: "14px 24px", display: "flex", justifyContent: "space-between", alignItems: "center", background: "var(--surface)", gap: 20 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -595,18 +519,11 @@ function TopBar({ scenes, totalSec, totalWords, onGenerate, genStatus, canGen, o
           <Stat label="duur" value={`~${fmt(totalSec)}`} />
           <Stat label="woorden" value={totalWords} />
         </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={onSendToHeyGen} disabled={scenes.length === 0 || !canGen || heygenStatus === "running"}
-            style={{ ...btn.primary, padding: "10px 18px", fontSize: 13.5, opacity: (canGen && heygenStatus !== "running") ? 1 : 0.5, cursor: (canGen && heygenStatus !== "running") ? "pointer" : "not-allowed", background: "var(--ok)" }}
-            title="Zend rechtstreeks naar HeyGen API">
-            {heygenStatus === "running" ? <>⏳ Renderen…</> : <>{Ico.play(14)} Zend naar HeyGen</>}
-          </button>
-          <button onClick={onGenerate} disabled={scenes.length === 0 || genStatus === "running"}
-            style={{ ...btn.primary, padding: "10px 18px", fontSize: 13.5, opacity: (scenes.length > 0 && genStatus !== "running") ? 1 : 0.5, cursor: (scenes.length > 0 && genStatus !== "running") ? "pointer" : "not-allowed" }}
-            title="Bouwt een kant-en-klare prompt voor Claude Code">
-            {genStatus === "running" ? <>⏳ Bezig…</> : <>{Ico.play(14)} Maak Claude Code prompt</>}
-          </button>
-        </div>
+        <button onClick={onSendToHeyGen} disabled={scenes.length === 0 || !canGen || heygenStatus === "running"}
+          style={{ ...btn.primary, padding: "10px 18px", fontSize: 13.5, opacity: (canGen && heygenStatus !== "running") ? 1 : 0.5, cursor: (canGen && heygenStatus !== "running") ? "pointer" : "not-allowed", background: "var(--ok)" }}
+          title="Zend rechtstreeks naar HeyGen API">
+          {heygenStatus === "running" ? <>⏳ Renderen…</> : <>{Ico.play(14)} Zend naar HeyGen</>}
+        </button>
       </div>
     </header>
   );
