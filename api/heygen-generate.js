@@ -10,35 +10,37 @@ export default async function handler(req, res) {
   }
 
   try {
-    // HeyGen v3 Video Agent endpoint
-    const response = await fetch('https://api.heygen.com/v3/video_agent/create', {
-      method: 'POST',
-      headers: {
-        'X-Api-Key': apiKey,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        script: {
-          text: scriptText,
-          type: 'text'
-        },
-        config: {
-          aspect_ratio: '9:16',
-          style: 'professional'
-        }
-      }),
-    });
+    // Use HeyGen CLI to generate video
+    const { exec } = require('child_process');
+    const { promisify } = require('util');
+    const execAsync = promisify(exec);
 
-    const data = await response.json();
+    // Export API key to environment
+    process.env.HEYGEN_API_KEY = apiKey;
 
-    if (!response.ok) {
-      return res.status(response.status).json({
-        error: data.error || `HeyGen API error: ${response.status}`,
-        details: data
+    // Create temporary script file
+    const fs = require('fs');
+    const scriptFile = `/tmp/script_${Date.now()}.txt`;
+    fs.writeFileSync(scriptFile, scriptText);
+
+    try {
+      // Try to call HeyGen CLI
+      const { stdout } = await execAsync(`heygen video-agent create --script-file "${scriptFile}" --aspect-ratio 9:16 --style professional --wait`, {
+        timeout: 300000 // 5 minutes
       });
+
+      // Parse output and return video info
+      const videoData = JSON.parse(stdout);
+
+      // Clean up
+      fs.unlinkSync(scriptFile);
+
+      return res.status(200).json(videoData);
+    } catch (cliError) {
+      // CLI not available, fallback error
+      throw new Error(`HeyGen CLI failed: ${cliError.message}`);
     }
 
-    return res.status(200).json(data);
   } catch (error) {
     return res.status(500).json({ error: `Server error: ${error.message}` });
   }
