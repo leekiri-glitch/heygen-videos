@@ -160,6 +160,7 @@ function App() {
   const [historyIdx, setHistoryIdx] = useState(0);
   const [voicePreviewText, setVoicePreviewText] = useState("Test mijn voice hier.");
   const [voicePreviewPlaying, setVoicePreviewPlaying] = useState(false);
+  const [voiceSpeed, setVoiceSpeed] = useState(() => localStorage.getItem("ss_voice_speed") || "1.0");
 
   const mimiekIds = useMemo(() => mimieken.map(m => m.id), [mimieken]);
   const mimiekById = useMemo(() => Object.fromEntries(mimieken.map(m => [m.id, m])), [mimieken]);
@@ -174,6 +175,7 @@ function App() {
   useEffect(() => { if (avatarId) localStorage.setItem("ss_avatar_id", avatarId); }, [avatarId]);
   useEffect(() => { localStorage.setItem("ss_avatar_ids", JSON.stringify(avatarIds)); }, [avatarIds]);
   useEffect(() => { localStorage.setItem("ss_scene_timing", JSON.stringify(sceneTiming)); }, [sceneTiming]);
+  useEffect(() => { localStorage.setItem("ss_voice_speed", voiceSpeed); }, [voiceSpeed]);
 
   useEffect(() => {
     if (historyIdx < history.length - 1) {
@@ -632,10 +634,42 @@ function App() {
               Upload een .mp3 / .wav van ElevenLabs, of laat leeg voor HeyGen's standaard voice.
             </p>
 
+            {/* TIMING & PACING */}
+            <div style={{ borderTop: "1px solid var(--line)", marginTop: 18, paddingTop: 18 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
+                <h3 className="serif" style={{ margin: 0, fontSize: 14, fontWeight: 500 }}>⏱️ Timing & Pacing</h3>
+                <Pill tone="accent">{fmt(scenes.reduce((s, sc, i) => s + (sceneTiming[i] || estSec(sc.text)), 0))}</Pill>
+              </div>
+
+              <div style={{ marginBottom: 12 }}>
+                <label style={{ fontSize: 12, fontWeight: 500, display: "block", marginBottom: 6 }}>Voice Speed</label>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <input type="range" min="0.5" max="2" step="0.1" value={voiceSpeed} onChange={e => setVoiceSpeed(e.target.value)}
+                    style={{ flex: 1, height: 4, borderRadius: 2, background: "var(--line-2)", outline: "none", cursor: "pointer" }} />
+                  <span className="mono" style={{ fontSize: 12, minWidth: 35, textAlign: "right", fontWeight: 500 }}>{voiceSpeed}x</span>
+                </div>
+                <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 4 }}>Slower (0.5x) → Normal (1.0x) → Faster (2x)</div>
+              </div>
+
+              <div style={{ fontSize: 11, background: "var(--accent-soft)", border: "1px solid var(--line-2)", borderRadius: 3, padding: 8, marginTop: 12 }}>
+                <div style={{ fontWeight: 500, marginBottom: 6, color: "var(--accent)" }}>Scene Durations:</div>
+                {scenes.map((sc, i) => (
+                  <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6, fontSize: 11 }}>
+                    <span style={{ color: "var(--ink-2)" }}>Scene {i + 1}:</span>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <input type="range" min="1" max="10" value={sceneTiming[i] || estSec(sc.text)} onChange={e => setSceneDuration(i, parseInt(e.target.value))}
+                        style={{ width: 80, height: 3, borderRadius: 2, background: "var(--line)", outline: "none", cursor: "pointer" }} />
+                      <span className="mono" style={{ minWidth: 30, textAlign: "right", fontWeight: 600, color: "var(--accent)" }}>{fmt(sceneTiming[i] || estSec(sc.text))}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
             {/* VOICE PREVIEW */}
             <div style={{ borderTop: "1px solid var(--line)", marginTop: 18, paddingTop: 18 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
-                <h3 className="serif" style={{ margin: 0, fontSize: 14, fontWeight: 500 }}>Preview</h3>
+                <h3 className="serif" style={{ margin: 0, fontSize: 14, fontWeight: 500 }}>🎙️ Voice Preview</h3>
                 <Pill>test</Pill>
               </div>
               <textarea
