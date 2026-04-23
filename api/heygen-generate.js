@@ -20,10 +20,9 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify({
         type: 'avatar',
-        avatar_id: avatarId || 'avt_17e95a63388a11eea55d6a7fa3e8cfa4', // Default professional avatar
-        script: scriptText,
-        // Optional: specify voice_id for consistency
-        voice_id: '1bd001e7e50f421d891986aad5e3e5d2' // Default voice
+        avatar_id: avatarId || 'avt_17e95a63388a11eea55d6a7fa3e8cfa4',
+        script: scriptText
+        // voice_id: removed - using HeyGen's default voice for reliability
       }),
     });
 
