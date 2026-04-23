@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: heygen-videos
+    env: node
+    buildCommand: echo "Static site with serverless functions"
+    startCommand: python3 -m http.server 3000
+    staticPublicPath: ./
+    routes:
+      - type: static
+        path: /
+        source: ./
+      - type: dynamic
+        path: /api/*
+        source: ./api
