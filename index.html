@@ -761,24 +761,15 @@ function App() {
               )}
             </div>
 
-            {/* VOICE PREVIEW */}
-            <div style={{ borderTop: "1px solid var(--line)", marginTop: 18, paddingTop: 18 }}>
+            {/* VOICE PREVIEW - DISABLED */}
+            <div style={{ borderTop: "1px solid var(--line)", marginTop: 18, paddingTop: 18, opacity: 0.5, pointerEvents: "none" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
                 <h3 className="serif" style={{ margin: 0, fontSize: 14, fontWeight: 500 }}>🎙️ Voice Preview</h3>
-                <Pill>test</Pill>
+                <Pill tone="err">disabled</Pill>
               </div>
-              <textarea
-                value={voicePreviewText}
-                onChange={e => setVoicePreviewText(e.target.value)}
-                placeholder="Test tekst voor voice preview…"
-                style={{ width: "100%", minHeight: 60, padding: 8, border: "1px solid var(--line-2)", borderRadius: 3, fontSize: 12, fontFamily: "'JetBrains Mono', monospace", background: "#fffdf8", outline: "none", resize: "vertical" }}
-              />
-              <button
-                onClick={previewVoice}
-                disabled={voicePreviewPlaying}
-                style={{ ...btn.primary, width: "100%", marginTop: 8, opacity: voicePreviewPlaying ? 0.6 : 1, cursor: voicePreviewPlaying ? "not-allowed" : "pointer" }}>
-                {voicePreviewPlaying ? <>⏳ Speelt af…</> : <>{Ico.play(12)} Preview voice</>}
-              </button>
+              <div style={{ fontSize: 11, color: "var(--ink-3)", background: "var(--accent-soft)", border: "1px solid var(--line-2)", borderRadius: 3, padding: 8 }}>
+                ⚠️ Voice preview is disabled. Audio wordt gegenereerd in je video via HeyGen.
+              </div>
             </div>
           </div>
 
