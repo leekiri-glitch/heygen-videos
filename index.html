@@ -161,6 +161,13 @@ function App() {
   const [voicePreviewText, setVoicePreviewText] = useState("Test mijn voice hier.");
   const [voicePreviewPlaying, setVoicePreviewPlaying] = useState(false);
   const [voiceSpeed, setVoiceSpeed] = useState(() => localStorage.getItem("ss_voice_speed") || "1.0");
+  const [captionsEnabled, setCaptionsEnabled] = useState(() => localStorage.getItem("ss_captions_enabled") === "true");
+  const [captionSize, setCaptionSize] = useState(() => localStorage.getItem("ss_caption_size") || "normal");
+  const [captionColor, setCaptionColor] = useState(() => localStorage.getItem("ss_caption_color") || "#ffffff");
+  const [captionTexts, setCaptionTexts] = useState(() => {
+    const s = localStorage.getItem("ss_caption_texts");
+    return s ? JSON.parse(s) : {};
+  });
 
   const mimiekIds = useMemo(() => mimieken.map(m => m.id), [mimieken]);
   const mimiekById = useMemo(() => Object.fromEntries(mimieken.map(m => [m.id, m])), [mimieken]);
@@ -176,6 +183,10 @@ function App() {
   useEffect(() => { localStorage.setItem("ss_avatar_ids", JSON.stringify(avatarIds)); }, [avatarIds]);
   useEffect(() => { localStorage.setItem("ss_scene_timing", JSON.stringify(sceneTiming)); }, [sceneTiming]);
   useEffect(() => { localStorage.setItem("ss_voice_speed", voiceSpeed); }, [voiceSpeed]);
+  useEffect(() => { localStorage.setItem("ss_captions_enabled", captionsEnabled); }, [captionsEnabled]);
+  useEffect(() => { localStorage.setItem("ss_caption_size", captionSize); }, [captionSize]);
+  useEffect(() => { localStorage.setItem("ss_caption_color", captionColor); }, [captionColor]);
+  useEffect(() => { localStorage.setItem("ss_caption_texts", JSON.stringify(captionTexts)); }, [captionTexts]);
 
   useEffect(() => {
     if (historyIdx < history.length - 1) {
@@ -470,7 +481,37 @@ function App() {
 
         if (status === "completed") {
           setHeygenLog(prev => [...prev, `✓ Video klaar!`]);
-          setHeygenLog(prev => [...prev, `📥 ${statusData.video_url}`]);
+          const videoUrl = statusData.video_url;
+          setHeygenLog(prev => [...prev, `📥 ${videoUrl}`]);
+
+          // Add captions if enabled
+          if (captionsEnabled && scenes.length > 0) {
+            setHeygenLog(prev => [...prev, "📝 Captions toevoegen…"]);
+            try {
+              const captionArray = scenes.map((sc, i) => captionTexts[i] || sc.text);
+              const captRes = await fetch("/api/add-captions", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  videoUrl,
+                  captions: captionArray,
+                  captionSize,
+                  captionColor
+                })
+              });
+
+              if (captRes.ok) {
+                const captData = await captRes.json();
+                setHeygenLog(prev => [...prev, "✓ Captions toegevoegd!"]);
+                setHeygenLog(prev => [...prev, `📥 ${captData.videoUrl}`]);
+              } else {
+                setHeygenLog(prev => [...prev, "⚠️ Captions toevoegen mislukt, originele video getoond"]);
+              }
+            } catch (captError) {
+              setHeygenLog(prev => [...prev, `⚠️ Caption error: ${captError.message}`]);
+            }
+          }
+
           setHeygenStatus("done");
           done = true;
           showToast("✅ Video klaar! Download beschikbaar");
@@ -664,6 +705,60 @@ function App() {
                   </div>
                 ))}
               </div>
+            </div>
+
+            {/* CAPTIONS */}
+            <div style={{ borderTop: "1px solid var(--line)", marginTop: 18, paddingTop: 18 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
+                <h3 className="serif" style={{ margin: 0, fontSize: 14, fontWeight: 500 }}>📝 Captions</h3>
+                <Pill tone={captionsEnabled ? "ok" : "default"}>{captionsEnabled ? "aan" : "uit"}</Pill>
+              </div>
+
+              <div style={{ marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
+                <input type="checkbox" id="captions-toggle" checked={captionsEnabled} onChange={e => setCaptionsEnabled(e.target.checked)}
+                  style={{ width: 16, height: 16, cursor: "pointer" }} />
+                <label htmlFor="captions-toggle" style={{ fontSize: 12, cursor: "pointer", userSelect: "none" }}>Captions in video toevoegen</label>
+              </div>
+
+              {captionsEnabled && (
+                <div style={{ background: "var(--accent-soft)", border: "1px solid var(--line-2)", borderRadius: 3, padding: 12 }}>
+                  <div style={{ marginBottom: 12 }}>
+                    <label style={{ fontSize: 12, fontWeight: 500, display: "block", marginBottom: 6 }}>Caption Size</label>
+                    <select value={captionSize} onChange={e => setCaptionSize(e.target.value)}
+                      style={{ width: "100%", padding: "8px 10px", border: "1px solid var(--line-2)", borderRadius: 3, fontSize: 12, background: "#fffdf8", cursor: "pointer" }}>
+                      <option value="small">Klein (14px)</option>
+                      <option value="normal">Normaal (20px)</option>
+                      <option value="large">Groot (28px)</option>
+                    </select>
+                  </div>
+
+                  <div style={{ marginBottom: 12 }}>
+                    <label style={{ fontSize: 12, fontWeight: 500, display: "block", marginBottom: 6 }}>Caption Color</label>
+                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                      <input type="color" value={captionColor} onChange={e => setCaptionColor(e.target.value)}
+                        style={{ width: 50, height: 38, border: "1px solid var(--line-2)", borderRadius: 3, cursor: "pointer" }} />
+                      <span className="mono" style={{ fontSize: 11, flex: 1, color: "var(--ink-2)" }}>{captionColor}</span>
+                    </div>
+                  </div>
+
+                  <div style={{ fontSize: 11, color: "var(--ink-3)", fontStyle: "italic" }}>
+                    💡 Captions worden automatisch uit jouw script gehaald. Je kunt ze hieronder aanpassen per scene.
+                  </div>
+
+                  <div style={{ marginTop: 10, fontSize: 11, background: "rgba(200, 90, 31, 0.05)", border: "1px solid rgba(200, 90, 31, 0.2)", borderRadius: 3, padding: 8 }}>
+                    {scenes.map((sc, i) => (
+                      <div key={i} style={{ marginBottom: 8, paddingBottom: 8, borderBottom: i < scenes.length - 1 ? "1px solid rgba(200, 90, 31, 0.1)" : "none" }}>
+                        <label style={{ fontSize: 11, fontWeight: 500, color: "var(--accent)", display: "block", marginBottom: 4 }}>Scene {i + 1}:</label>
+                        <textarea
+                          value={captionTexts[i] || sc.text}
+                          onChange={e => setCaptionTexts({ ...captionTexts, [i]: e.target.value })}
+                          style={{ width: "100%", minHeight: 35, padding: 6, border: "1px solid rgba(200, 90, 31, 0.2)", borderRadius: 2, fontSize: 11, fontFamily: "'JetBrains Mono', monospace", background: "#fffdf8", outline: "none", resize: "vertical" }}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* VOICE PREVIEW */}
