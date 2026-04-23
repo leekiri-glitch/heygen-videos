@@ -664,6 +664,41 @@ function App() {
             </div>
           </div>
 
+          {/* TAG MANAGER */}
+          <div style={{ borderTop: "1px solid var(--line)", paddingTop: 18, marginTop: 18 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
+              <h2 className="serif" style={{ margin: 0, fontSize: 18, fontWeight: 500 }}>📌 Tags</h2>
+              <Pill>beheer</Pill>
+            </div>
+            <p style={{ margin: "0 0 10px", fontSize: 11.5, color: "var(--ink-3)", lineHeight: 1.5 }}>
+              Zet tags voor elke scene. Klik op tag om naam te wijzigen of toe te voegen.
+            </p>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {mimieken.map(m => (
+                <div key={m.id} style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                  <input
+                    type="text"
+                    value={m.label}
+                    onChange={e => {
+                      const updated = mimieken.map(mm => mm.id === m.id ? { ...mm, label: e.target.value } : mm);
+                      setMimieken(updated);
+                    }}
+                    style={{ flex: 1, padding: "6px 8px", border: "1px solid var(--line-2)", borderRadius: 3, fontSize: 12, background: "#fffdf8", fontFamily: "'JetBrains Mono', monospace", outline: "none" }}
+                    placeholder="Tag naam"
+                  />
+                  <span className="mono" style={{ fontSize: 10, padding: "4px 8px", background: "var(--line)", borderRadius: 3, color: "var(--ink-2)", minWidth: "fit-content" }}>[{m.id}]</span>
+                  <button onClick={() => removeMimiek(m.id)} style={{ padding: "6px 8px", background: "#f2dcd6", color: "var(--err)", border: "none", borderRadius: 3, cursor: "pointer", fontSize: 11, fontWeight: 500 }}>🗑️</button>
+                </div>
+              ))}
+              <button onClick={() => {
+                const newId = "tag_" + Date.now();
+                setMimieken([...mimieken, { id: newId, label: "Nieuwe tag", nl: "Nieuwe tag", src: mimieken[0]?.src || "" }]);
+              }} style={{ padding: "8px 12px", background: "var(--accent-soft)", color: "var(--accent)", border: "1px solid var(--accent)", borderRadius: 3, cursor: "pointer", fontSize: 12, fontWeight: 500 }}>
+                ➕ Nieuwe tag
+              </button>
+            </div>
+          </div>
+
           {/* VOICE */}
           <div style={{ borderTop: "1px solid var(--line)", paddingTop: 18 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
@@ -801,18 +836,6 @@ function App() {
               <p style={{ margin: "8px 0 0", fontSize: 11, color: "var(--ink-3)", lineHeight: 1.5 }}>
                 Paste de avatar ID van HeyGen. Alle scenes gebruiken dezelfde avatar.
               </p>
-            </div>
-          </div>
-
-          {/* TEMPLATES */}
-          <div style={{ borderTop: "1px solid var(--line)", paddingTop: 18 }}>
-            <h2 className="serif" style={{ margin: "0 0 10px", fontSize: 18, fontWeight: 500 }}>Templates</h2>
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {TEMPLATES.map(t => (
-                <button key={t.name} onClick={() => insertTemplate(t)} style={btn.sec}>
-                  + {t.name}
-                </button>
-              ))}
             </div>
           </div>
 
