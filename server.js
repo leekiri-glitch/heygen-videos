@@ -62,7 +62,7 @@ http.createServer(async (req, res) => {
     if (!script) { res.writeHead(400); return res.end(JSON.stringify({ error: 'script vereist' })); }
     const r = await heygen('POST', '/v2/video/generate', {
       video_inputs: [{
-        character: { type: 'avatar', avatar_id: avatarId || 'Angela-inblackskirt-20220820', avatar_style: 'normal' },
+        character: { type: 'talking_photo', talking_photo_id: avatarId },
         voice: { type: 'text', input_text: script, ...(voiceId ? { voice_id: voiceId } : {}) },
       }],
       dimension: { width: 1280, height: 720 },
