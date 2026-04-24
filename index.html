@@ -325,7 +325,8 @@ async function generate() {
       body: JSON.stringify({ script, voiceId }),
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.error || data.message || `Fout ${res.status}`);
+    log('API antwoord: ' + JSON.stringify(data));
+    if (!res.ok) throw new Error(JSON.stringify(data.error || data.message || data) || `Fout ${res.status}`);
 
     const videoId = data.data?.video_id || data.video_id;
     if (!videoId) throw new Error('Geen video ID ontvangen: ' + JSON.stringify(data));
