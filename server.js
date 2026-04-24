@@ -63,7 +63,7 @@ http.createServer(async (req, res) => {
     const r = await heygen('POST', '/v2/video/generate', {
       video_inputs: [{
         character: { type: 'avatar', avatar_id: avatarId || 'Angela-inblackskirt-20220820', avatar_style: 'normal' },
-        voice: { type: 'text', input_text: script, voice_id: voiceId || '1bd001e7e50f421d891986aad5e3e5d2' },
+        voice: { type: 'text', input_text: script, ...(voiceId ? { voice_id: voiceId } : {}) },
       }],
       dimension: { width: 1280, height: 720 },
     });
