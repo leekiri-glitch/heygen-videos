@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HeyGen Studio</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: system-ui, sans-serif; background: #0f0f0f; color: #f0f0f0; min-height: 100vh; display: flex; flex-direction: column; }
+  header { padding: 20px 32px; border-bottom: 1px solid #222; display: flex; align-items: center; gap: 12px; }
+  header h1 { font-size: 18px; font-weight: 600; }
+  header span { font-size: 12px; color: #666; }
+  main { flex: 1; max-width: 720px; margin: 48px auto; width: 100%; padding: 0 24px; display: flex; flex-direction: column; gap: 24px; }
+  label { font-size: 13px; color: #999; display: block; margin-bottom: 6px; }
+  textarea { width: 100%; background: #1a1a1a; border: 1px solid #2a2a2a; color: #f0f0f0; border-radius: 8px; padding: 14px; font-size: 14px; line-height: 1.6; resize: vertical; min-height: 160px; outline: none; font-family: inherit; }
+  textarea:focus { border-color: #444; }
+  input[type=text] { width: 100%; background: #1a1a1a; border: 1px solid #2a2a2a; color: #f0f0f0; border-radius: 8px; padding: 12px 14px; font-size: 14px; outline: none; font-family: inherit; }
+  input[type=text]:focus { border-color: #444; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  button { width: 100%; padding: 14px; background: #fff; color: #000; border: none; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer; transition: opacity .15s; }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+  button:hover:not(:disabled) { opacity: 0.88; }
+  #log { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 8px; padding: 16px; font-size: 13px; line-height: 1.7; font-family: monospace; min-height: 80px; white-space: pre-wrap; color: #aaa; display: none; }
+  #log.visible { display: block; }
+  #videoWrap { display: none; flex-direction: column; gap: 12px; }
+  #videoWrap.visible { display: flex; }
+  video { width: 100%; border-radius: 8px; background: #000; }
+  a.dl { display: block; text-align: center; padding: 12px; background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 8px; color: #fff; text-decoration: none; font-size: 14px; }
+  a.dl:hover { background: #222; }
+  .dot { display: inline-block; animation: blink 1s infinite; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+</style>
+</head>
+<body>
+<header>
+  <svg width="28" height="28" viewBox="0 0 28 28" fill="none"><rect width="28" height="28" rx="6" fill="#fff"/><polygon points="10,7 22,14 10,21" fill="#000"/></svg>
+  <h1>HeyGen Studio</h1>
+  <span>AI avatar video generator</span>
+</header>
+<main>
+  <div>
+    <label>Script</label>
+    <textarea id="script" placeholder="Schrijf hier je script…">Hallo! Dit is een test video gemaakt met HeyGen Studio. Welkom bij de toekomst van video creatie.</textarea>
+  </div>
+  <div class="row">
+    <div>
+      <label>Avatar ID (optioneel)</label>
+      <input type="text" id="avatarId" placeholder="Angela-inblackskirt-20220820">
+    </div>
+    <div>
+      <label>Voice ID (optioneel)</label>
+      <input type="text" id="voiceId" placeholder="1bd001e7e50f421d891986aad5e3e5d2">
+    </div>
+  </div>
+  <button id="btn" onclick="generate()">Video genereren</button>
+  <div id="log"></div>
+  <div id="videoWrap">
+    <video id="video" controls></video>
+    <a id="dlLink" class="dl" href="#" download>Download video</a>
+  </div>
+</main>
+<script>
+let polling = null;
+
+function log(msg) {
+  const el = document.getElementById('log');
+  el.classList.add('visible');
+  el.textContent += msg + '\n';
+  el.scrollTop = el.scrollHeight;
+}
+
+function setBtn(text, disabled) {
+  const b = document.getElementById('btn');
+  b.textContent = text;
+  b.disabled = disabled;
+}
+
+async function generate() {
+  const script = document.getElementById('script').value.trim();
+  if (!script) { alert('Vul een script in'); return; }
+
+  const avatarId = document.getElementById('avatarId').value.trim() || undefined;
+  const voiceId  = document.getElementById('voiceId').value.trim() || undefined;
+
+  document.getElementById('log').textContent = '';
+  document.getElementById('videoWrap').classList.remove('visible');
+  setBtn('Bezig…', true);
+  log('Video aanmaken…');
+
+  try {
+    const res = await fetch('/api/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ script, avatarId, voiceId }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || data.message || `Fout ${res.status}`);
+
+    const videoId = data.data?.video_id || data.video_id;
+    if (!videoId) throw new Error('Geen video ID ontvangen: ' + JSON.stringify(data));
+
+    log(`Video ID: ${videoId}`);
+    log('HeyGen is aan het renderen…');
+    poll(videoId);
+  } catch (e) {
+    log(`Fout: ${e.message}`);
+    setBtn('Opnieuw proberen', false);
+  }
+}
+
+async function poll(videoId) {
+  let tries = 0;
+  const max = 120;
+
+  async function check() {
+    tries++;
+    try {
+      const res = await fetch(`/api/status?id=${videoId}`);
+      const data = await res.json();
+      const status = data.data?.status || data.status;
+      const url    = data.data?.video_url || data.video_url;
+
+      if (status === 'completed' && url) {
+        log('Klaar!');
+        document.getElementById('video').src = url;
+        document.getElementById('dlLink').href = url;
+        document.getElementById('videoWrap').classList.add('visible');
+        setBtn('Nieuwe video', false);
+        return;
+      }
+      if (status === 'failed') {
+        throw new Error('Rendering mislukt');
+      }
+      if (tries >= max) throw new Error('Timeout — probeer later opnieuw');
+
+      log(`Status: ${status} (${tries * 5}s)`);
+      setTimeout(check, 5000);
+    } catch (e) {
+      log(`Fout: ${e.message}`);
+      setBtn('Opnieuw proberen', false);
+    }
+  }
+
+  setTimeout(check, 5000);
+}
+</script>
+</body>
+</html>

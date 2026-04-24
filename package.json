@@ -1,0 +1,12 @@
+{
+  "name": "heygen-studio",
+  "version": "2.0.0",
+  "description": "HeyGen AI video generator",
+  "private": true,
+  "engines": {
+    "node": "20.x"
+  },
+  "scripts": {
+    "start": "node server.js"
+  }
+}
