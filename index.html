@@ -224,9 +224,12 @@
   </div>
 
   <div class="card">
-    <div class="card-title">Voice</div>
-    <input type="text" id="voiceId" placeholder="Voice ID — leeg laten voor standaard stem">
-    <p class="card-hint">Vind voice IDs via je HeyGen dashboard → Voices.</p>
+    <div class="card-title">Avatar & Voice</div>
+    <label style="font-size:13px;color:var(--ink-2);">Avatar ID</label>
+    <input type="text" id="avatarId" placeholder="Plak hier je Avatar ID van HeyGen">
+    <label style="font-size:13px;color:var(--ink-2);">Voice ID</label>
+    <input type="text" id="voiceId" placeholder="Plak hier je Voice ID van HeyGen">
+    <p class="card-hint">Vind IDs via app.heygen.com → Avatars en → Voices.</p>
   </div>
 
   <button class="gen-btn" id="genBtn" onclick="generate()">Video genereren</button>
@@ -310,6 +313,7 @@ async function generate() {
   if (!filled.length) { alert('Voeg minstens één scene met tekst toe'); return; }
 
   const script = filled.map((s, i) => `Scene ${i + 1}:\n${s.text.trim()}`).join('\n\n');
+  const avatarId = document.getElementById('avatarId').value.trim() || undefined;
   const voiceId = document.getElementById('voiceId').value.trim() || undefined;
 
   document.getElementById('log').textContent = '';
@@ -322,7 +326,7 @@ async function generate() {
     const res = await fetch('/api/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ script, voiceId }),
+      body: JSON.stringify({ script, avatarId, voiceId }),
     });
     const data = await res.json();
     log('API antwoord: ' + JSON.stringify(data));
