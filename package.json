@@ -1,13 +1,12 @@
 {
-  "name": "heygen-videos",
-  "version": "1.0.0",
-  "description": "Scene Studio - HeyGen video creation platform",
+  "name": "scene-studio",
+  "version": "2.0.0",
+  "description": "Scene Studio — HeyGen AI avatar video generatie",
   "private": true,
   "engines": {
     "node": "20.x"
   },
-  "dependencies": {
-    "node-fetch": "^2.7.0",
-    "@teamduality/heygen-typescript-sdk": "^0.4.3"
+  "scripts": {
+    "start": "node server.js"
   }
 }
