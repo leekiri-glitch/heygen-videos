@@ -1,89 +1,102 @@
-# HeyGen Videos
+# Scene Studio — HeyGen Video Generatie
 
-Create AI-powered videos using HeyGen skills in Claude Code.
+Genereer AI avatar-video's via HeyGen, rechtstreeks vanuit Claude.
 
-## Prerequisites
+---
 
-- Node.js 22+ (for skill support)
-- HeyGen account with API key ([Get one here](https://app.heygen.com/api))
-- Claude Code or Cursor IDE with skills support
+## Optie 1 · Claude Web (aanbevolen)
 
-## Setup
+Gebruik HeyGen's officiële remote MCP server — geen API-key nodig in de app zelf, alles loopt via OAuth.
 
-### 1. Configure HeyGen API Key
+### 1. Voeg de connector toe
 
-Add your HeyGen API key to your shell profile (`~/.bashrc` or `~/.zshrc`):
+Open Claude Web → **+** → **Connector** → **Manage Connector** → **+ Add custom connector**.
+
+| Veld | Waarde |
+|------|--------|
+| Name | `HeyGen` |
+| MCP server URL | `https://mcp.heygen.com/mcp/v1/` |
+
+### 2. Authenticeer
+
+Klik op **Connect** na het opslaan. Je wordt doorgestuurd naar HeyGen's autorisatiepagina. Keur de toegang goed om de OAuth-flow te voltooien.
+
+### 3. Rechten (optioneel)
+
+Zet de HeyGen-connector op **Always Allow** om herhaalde permissieprompts te vermijden.
+
+### 4. Gebruik
+
+Open een nieuw Claude-gesprek en geef een videogeneration-prompt:
+
+```
+Genereer een video via HeyGen MCP over het verschil tussen Skills en MCP.
+```
+
+Claude regelt avatarselectie, scriptgeneratie en videorendering via de HeyGen API. Voltooide video's zijn ook zichtbaar op de **Projects**-pagina in je HeyGen-dashboard.
+
+### Beperkingen
+
+| Beperking | Detail |
+|-----------|--------|
+| HeyGen Free Tier | Beperkte videocredits. Upgrade naar Creator-plan voor productiegebruik. |
+| Claude Free Tier | Custom connectors zijn niet beschikbaar. Een betaald Claude-abonnement is vereist. |
+
+---
+
+## Optie 2 · Scene Studio (web app)
+
+Een lokale editor voor het samenstellen van scripts en het versturen naar HeyGen via de REST API.
+
+### Vereisten
+
+- Node.js 20+
+- HeyGen-account met API-sleutel ([Aanmaken](https://app.heygen.com/api))
+- Vercel-account (voor deployment van de serverless proxy)
+
+### Lokaal draaien
 
 ```bash
-export HEYGEN_API_KEY=your_api_key_here
+# Geen buildstap nodig — open index.html direct in je browser
+# of gebruik de Vercel dev server voor de API-proxy:
+npx vercel dev
 ```
 
-Then reload your shell:
+Ga naar `http://localhost:3000` en plak je HeyGen API-sleutel in het rechterpaneel.
+
+### Gebruik
+
+1. **Script** — Plak je tekst met `[mimiek]`-tags (bijv. `[smile]`, `[neutral]`)
+2. **Scenes** — Controleer en herorden de geparsde scenes
+3. **Mimieken** — Upload foto's voor elke uitdrukking
+4. **HeyGen API** — Vul je API-sleutel in
+5. Klik **Zend naar HeyGen** — de video verschijnt in je HeyGen-dashboard
+
+### Deployen op Vercel
 
 ```bash
-source ~/.bashrc
-# or
-source ~/.zshrc
+npx vercel --prod
 ```
 
-### 2. Install HeyGen Skills
+De serverless functies in `api/` worden automatisch herkend.
 
-HeyGen skills are registered automatically when you install them via:
+---
 
-```bash
-npx skills add https://github.com/heygen-com/skills --skill heygen
-```
-
-This installs:
-- `/heygen-video` — Generate videos from scripts or prompts
-- `/heygen-avatar` — Create and manage AI avatars
-
-## Usage
-
-### Generate a Video
-
-In Claude Code, use the `/heygen-video` command:
+## Projectstructuur
 
 ```
-/heygen-video I want to create a 30-second explainer video about cloud computing
+index.html          # Scene Studio UI (React via CDN)
+api/
+  heygen-generate.js    # POST /api/heygen-generate
+  heygen-proxy.js       # POST /api/heygen-proxy
+  heygen-status.js      # POST /api/heygen-status
+  heygen-video-status.js
+  heygen-video-v3.js
+vercel.json         # Vercel configuratie
 ```
 
-### Create an Avatar
+## Links
 
-Use the `/heygen-avatar` command to create a digital twin:
-
-```
-/heygen-avatar Create an avatar named "Alex" from my image with a professional voice
-```
-
-## Features
-
-- **Video Generation**: Create videos from text scripts or AI-generated content
-- **Avatar Management**: Create and manage persistent digital avatars
-- **Multiple Styles**: 20+ curated video styles to choose from
-- **Voice Support**: Multiple voices and languages available
-- **API Integration**: Direct API access for programmatic video generation
-
-## Documentation
-
-- [HeyGen Skills Repository](https://github.com/heygen-com/skills)
-- [HeyGen Developer Docs](https://developers.heygen.com)
+- [HeyGen MCP documentatie](https://heygen-1fa696a7.mintlify.app)
 - [HeyGen API Reference](https://docs.heygen.com)
-
-## Troubleshooting
-
-**Command not found**: Ensure `HEYGEN_API_KEY` is set and your shell has reloaded:
-```bash
-echo $HEYGEN_API_KEY  # Should show your API key
-```
-
-**Skills not appearing**: Verify the installation:
-```bash
-npx skills list
-```
-
-**API errors**: Check your HeyGen account has sufficient credits at [app.heygen.com](https://app.heygen.com)
-
-## License
-
-This project uses HeyGen's public skills and API services.
+- [HeyGen Developer Portal](https://app.heygen.com/api)
